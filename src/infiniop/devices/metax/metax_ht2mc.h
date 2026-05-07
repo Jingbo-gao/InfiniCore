@@ -27,6 +27,7 @@
 #define hcMemcpyDefault mcMemcpyDefault
 #define hcMemcpyAsync mcMemcpyAsync
 #define hcMemcpy mcMemcpy
+#define hcMemGetInfo mcMemGetInfo
 #define hcMallocHost mcMallocHost
 #define hcMallocAsync mcMallocAsync
 #define hcMalloc mcMalloc

@@ -1,4 +1,5 @@
 #include "memory_test.h"
+#include "test_mutual_awareness.h"
 #include "test_nn_module.h"
 #include "test_runner.h"
 #include "test_tensor_destructor.h"
@@ -16,6 +17,9 @@ struct ParsedArgs {
     bool run_performance = true;
     bool run_stress = true;
     bool run_module = false;
+#ifdef ENABLE_MUTUAL_AWARENESS
+    bool run_mutual_awareness = true;
+#endif
     int num_threads = 4;
     int iterations = 1000;
 };
@@ -95,6 +99,9 @@ ParsedArgs parseArgs(int argc, char *argv[]) {
 
             std::string test_name = argv[++i];
             args.run_basic = args.run_concurrency = args.run_exception_safety = args.run_memory_leak = args.run_performance = args.run_stress = args.run_module = false;
+#ifdef ENABLE_MUTUAL_AWARENESS
+            args.run_mutual_awareness = false;
+#endif
 
             if (test_name == "basic") {
                 args.run_basic = true;
@@ -110,8 +117,15 @@ ParsedArgs parseArgs(int argc, char *argv[]) {
                 args.run_stress = true;
             } else if (test_name == "module") {
                 args.run_module = true;
+#ifdef ENABLE_MUTUAL_AWARENESS
+            } else if (test_name == "mutual") {
+                args.run_mutual_awareness = true;
+#endif
             } else if (test_name == "all") {
                 args.run_basic = args.run_concurrency = args.run_exception_safety = args.run_memory_leak = args.run_performance = args.run_stress = args.run_module = true;
+#ifdef ENABLE_MUTUAL_AWARENESS
+                args.run_mutual_awareness = true;
+#endif
             } else {
                 std::cerr << "Error: Unknown test name: " << test_name << std::endl;
                 exit(EXIT_FAILURE);
@@ -198,6 +212,12 @@ int main(int argc, char *argv[]) {
         if (args.run_stress) {
             runner.addTest(std::make_unique<infinicore::test::StressTest>());
         }
+
+#ifdef ENABLE_MUTUAL_AWARENESS
+        if (args.run_mutual_awareness) {
+            runner.addTest(std::make_unique<infinicore::test::MutualAwarenessTest>());
+        }
+#endif
 
         spdlog::info("About to run all tests");
         // Run all tests

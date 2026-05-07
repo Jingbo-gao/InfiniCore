@@ -1,6 +1,16 @@
 #include "../../utils.h"
 #include "infinirt_cuda.cuh"
 #include <cuda_runtime.h>
+#include <algorithm>
+#include <chrono>
+#include <cstring>
+#include <deque>
+#include <mutex>
+#include <unordered_map>
+
+#if !defined(_WIN32)
+#include <dlfcn.h>
+#endif
 
 #define CHECK_CUDART(RT_API) CHECK_INTERNAL(RT_API, cudaSuccess)
 
@@ -11,6 +21,249 @@
             { return INFINI_STATUS_INTERNAL_ERROR; } \
         }                                            \
     } while (0)
+
+// ============================================================
+// Communication sampling — shared by all CUDA-like backends
+// (NVIDIA, Iluvatar, QY, Hygon, Ali, …)
+// ============================================================
+namespace {
+
+struct PendingCommunicationSample {
+    cudaEvent_t start_event = nullptr;
+    cudaEvent_t end_event = nullptr;
+    uint64_t bytes = 0;
+};
+
+struct CompletedCommunicationSample {
+    std::chrono::steady_clock::time_point completed_at;
+    double duration_ms = 0.0;
+    uint64_t bytes = 0;
+};
+
+struct DeviceCommunicationState {
+    std::deque<PendingCommunicationSample> pending;
+    std::deque<CompletedCommunicationSample> recent;
+};
+
+struct CommunicationStatsStore {
+    std::mutex mutex;
+    std::unordered_map<int, DeviceCommunicationState> per_device;
+};
+
+CommunicationStatsStore &communicationStatsStore() {
+    static CommunicationStatsStore store;
+    return store;
+}
+
+constexpr auto kCommunicationWindow = std::chrono::seconds(1);
+
+void destroyCommunicationSample(const PendingCommunicationSample &sample) {
+    if (sample.start_event != nullptr) {
+        cudaEventDestroy(sample.start_event);
+    }
+    if (sample.end_event != nullptr) {
+        cudaEventDestroy(sample.end_event);
+    }
+}
+
+template <typename DeviceFn>
+cudaError_t withDeviceGuard(int device_id, DeviceFn &&fn) {
+    int previous_device = 0;
+    auto status = cudaGetDevice(&previous_device);
+    if (status != cudaSuccess) {
+        return status;
+    }
+
+    if (previous_device != device_id) {
+        status = cudaSetDevice(device_id);
+        if (status != cudaSuccess) {
+            return status;
+        }
+    }
+
+    auto fn_status = fn();
+
+    if (previous_device != device_id) {
+        auto restore_status = cudaSetDevice(previous_device);
+        if (fn_status == cudaSuccess && restore_status != cudaSuccess) {
+            fn_status = restore_status;
+        }
+    }
+    return fn_status;
+}
+
+void pruneCommunicationWindow(DeviceCommunicationState &state, std::chrono::steady_clock::time_point now) {
+    while (!state.recent.empty() && now - state.recent.front().completed_at > kCommunicationWindow) {
+        state.recent.pop_front();
+    }
+}
+
+void flushCompletedCommunicationSamples(int device_id, DeviceCommunicationState &state) {
+    std::deque<PendingCommunicationSample> remaining;
+
+    auto status = withDeviceGuard(device_id, [&]() {
+        for (auto &sample : state.pending) {
+            auto query_status = cudaEventQuery(sample.end_event);
+            if (query_status == cudaSuccess) {
+                float elapsed_ms = 0.0f;
+                auto elapsed_status = cudaEventElapsedTime(&elapsed_ms, sample.start_event, sample.end_event);
+                if (elapsed_status == cudaSuccess) {
+                    state.recent.push_back({
+                        std::chrono::steady_clock::now(),
+                        static_cast<double>(elapsed_ms),
+                        sample.bytes});
+                }
+                destroyCommunicationSample(sample);
+            } else if (query_status == cudaErrorNotReady) {
+                remaining.push_back(sample);
+            } else {
+                destroyCommunicationSample(sample);
+            }
+        }
+        return cudaSuccess;
+    });
+
+    if (status == cudaSuccess) {
+        state.pending.swap(remaining);
+    }
+}
+
+void populateCommunicationSnapshot(int device_id, infinirtDeviceResourceSnapshot_t *snapshot) {
+    auto &store = communicationStatsStore();
+    std::lock_guard<std::mutex> lock(store.mutex);
+    auto &state = store.per_device[device_id];
+
+    flushCompletedCommunicationSamples(device_id, state);
+    auto now = std::chrono::steady_clock::now();
+    pruneCommunicationWindow(state, now);
+
+    double total_comm_ms = 0.0;
+    uint64_t total_comm_bytes = 0;
+    for (auto const &sample : state.recent) {
+        total_comm_ms += sample.duration_ms;
+        total_comm_bytes += sample.bytes;
+    }
+
+    double window_ms = std::chrono::duration<double, std::milli>(kCommunicationWindow).count();
+
+    snapshot->communication_bytes = total_comm_bytes;
+    // Avoid std::min — Corex SDK cuda_wrappers/algorithm conflicts with
+    // the standard library on float-vs-double template deduction.
+    double ratio = total_comm_ms / window_ms;
+    snapshot->communication_time_ratio = static_cast<float>(ratio > 1.0 ? 1.0 : ratio);
+    snapshot->valid_fields |= INFINIRT_RESOURCE_FIELD_COMMUNICATION;
+}
+
+} // namespace
+
+// ============================================================
+// GPU utilization via management library (NVML / IXML)
+//
+// NVIDIA: dlopen libnvidia-ml.so  → nvml* symbols
+// Iluvatar: dlopen libixml.so     → same nvml* symbols (IXML is
+//           an NVML-compatible management library)
+// ============================================================
+#if !defined(_WIN32) && (defined(ENABLE_NVIDIA_API) || defined(ENABLE_ILUVATAR_API))
+namespace {
+
+typedef struct nvmlDevice_st *nvmlDevice_t;
+typedef int nvmlReturn_t;
+
+struct nvmlUtilization_t {
+    unsigned int gpu;
+    unsigned int memory;
+};
+
+constexpr nvmlReturn_t NVML_SUCCESS = 0;
+
+using NvmlInitV2Fn = nvmlReturn_t (*)();
+using NvmlShutdownFn = nvmlReturn_t (*)();
+using NvmlDeviceGetHandleByIndexV2Fn = nvmlReturn_t (*)(unsigned int, nvmlDevice_t *);
+using NvmlDeviceGetUtilizationRatesFn = nvmlReturn_t (*)(nvmlDevice_t, nvmlUtilization_t *);
+
+struct NvmlApi {
+    void *handle = nullptr;
+    NvmlInitV2Fn init_v2 = nullptr;
+    NvmlShutdownFn shutdown = nullptr;
+    NvmlDeviceGetHandleByIndexV2Fn get_handle_by_index_v2 = nullptr;
+    NvmlDeviceGetUtilizationRatesFn get_utilization_rates = nullptr;
+    bool available = false;
+    bool initialized = false;
+};
+
+NvmlApi &nvmlApi() {
+    static NvmlApi api = []() {
+        NvmlApi loaded;
+        const char *candidates[] = {
+#if defined(ENABLE_NVIDIA_API)
+            "libnvidia-ml.so.1",
+            "libnvidia-ml.so",
+            "libnvidia-ml.dylib",
+#elif defined(ENABLE_ILUVATAR_API)
+            "libixml.so",
+#endif
+        };
+
+        for (auto candidate : candidates) {
+            loaded.handle = dlopen(candidate, RTLD_LAZY | RTLD_LOCAL);
+            if (loaded.handle != nullptr) {
+                break;
+            }
+        }
+
+        if (loaded.handle == nullptr) {
+            return loaded;
+        }
+
+        loaded.init_v2 = reinterpret_cast<NvmlInitV2Fn>(dlsym(loaded.handle, "nvmlInit_v2"));
+        loaded.shutdown = reinterpret_cast<NvmlShutdownFn>(dlsym(loaded.handle, "nvmlShutdown"));
+        loaded.get_handle_by_index_v2 = reinterpret_cast<NvmlDeviceGetHandleByIndexV2Fn>(dlsym(loaded.handle, "nvmlDeviceGetHandleByIndex_v2"));
+        loaded.get_utilization_rates = reinterpret_cast<NvmlDeviceGetUtilizationRatesFn>(dlsym(loaded.handle, "nvmlDeviceGetUtilizationRates"));
+
+        loaded.available = loaded.init_v2 != nullptr
+                           && loaded.shutdown != nullptr
+                           && loaded.get_handle_by_index_v2 != nullptr
+                           && loaded.get_utilization_rates != nullptr;
+        return loaded;
+    }();
+    return api;
+}
+
+bool tryPopulateNvmlUtilization(int device_id, infinirtDeviceResourceSnapshot_t *snapshot) {
+    auto &api = nvmlApi();
+    if (!api.available) {
+        return false;
+    }
+
+    if (!api.initialized) {
+        if (api.init_v2() != NVML_SUCCESS) {
+            return false;
+        }
+        api.initialized = true;
+    }
+
+    nvmlDevice_t device = nullptr;
+    if (api.get_handle_by_index_v2(static_cast<unsigned int>(device_id), &device) != NVML_SUCCESS) {
+        return false;
+    }
+
+    nvmlUtilization_t util{};
+    if (api.get_utilization_rates(device, &util) != NVML_SUCCESS) {
+        return false;
+    }
+
+    snapshot->compute_utilization = static_cast<float>(util.gpu) / 100.0f;
+    snapshot->memory_bandwidth_utilization = static_cast<float>(util.memory) / 100.0f;
+    snapshot->kernel_time_ratio = snapshot->compute_utilization;
+    snapshot->valid_fields |= INFINIRT_RESOURCE_FIELD_COMPUTE_UTILIZATION
+                              | INFINIRT_RESOURCE_FIELD_MEMORY_BANDWIDTH_UTILIZATION
+                              | INFINIRT_RESOURCE_FIELD_KERNEL_TIME_RATIO;
+    snapshot->estimated_fields |= INFINIRT_RESOURCE_FIELD_KERNEL_TIME_RATIO;
+    return true;
+}
+
+} // namespace
+#endif
 
 // 根据宏定义选择命名空间并实现
 #if defined(ENABLE_NVIDIA_API)
@@ -35,6 +288,84 @@ infiniStatus_t getDeviceCount(int *count) {
 infiniStatus_t setDevice(int device_id) {
     CHECK_CUDART(cudaSetDevice(device_id));
     return INFINI_STATUS_SUCCESS;
+}
+
+infiniStatus_t getMemInfo(int device_id, size_t *free_bytes, size_t *total_bytes) {
+    if (free_bytes == nullptr || total_bytes == nullptr) {
+        return INFINI_STATUS_NULL_POINTER;
+    }
+
+    int previous_device = 0;
+    CHECK_CUDART(cudaGetDevice(&previous_device));
+
+    if (previous_device != device_id) {
+        CHECK_CUDART(cudaSetDevice(device_id));
+    }
+
+    auto query_status = cudaMemGetInfo(free_bytes, total_bytes);
+
+    if (previous_device != device_id) {
+        auto restore_status = cudaSetDevice(previous_device);
+        if (query_status == cudaSuccess && restore_status != cudaSuccess) {
+            query_status = restore_status;
+        }
+    }
+
+    CHECK_CUDART(query_status);
+    return INFINI_STATUS_SUCCESS;
+}
+
+infiniStatus_t getDeviceResourceSnapshot(int device_id, infinirtDeviceResourceSnapshot_t *snapshot) {
+    if (snapshot == nullptr) {
+        return INFINI_STATUS_NULL_POINTER;
+    }
+
+    std::memset(snapshot, 0, sizeof(*snapshot));
+    snapshot->device_id = device_id;
+#if defined(ENABLE_NVIDIA_API)
+    snapshot->device_type = INFINI_DEVICE_NVIDIA;
+#elif defined(ENABLE_ILUVATAR_API)
+    snapshot->device_type = INFINI_DEVICE_ILUVATAR;
+#elif defined(ENABLE_QY_API)
+    snapshot->device_type = INFINI_DEVICE_QY;
+#elif defined(ENABLE_HYGON_API)
+    snapshot->device_type = INFINI_DEVICE_HYGON;
+#elif defined(ENABLE_ALI_API)
+    snapshot->device_type = INFINI_DEVICE_ALI;
+#else
+    snapshot->device_type = INFINI_DEVICE_NVIDIA;
+#endif
+
+    auto status = getMemInfo(device_id, &snapshot->free_bytes, &snapshot->total_bytes);
+    if (status != INFINI_STATUS_SUCCESS) {
+        return status;
+    }
+
+    if (snapshot->total_bytes >= snapshot->free_bytes) {
+        snapshot->used_bytes = snapshot->total_bytes - snapshot->free_bytes;
+    }
+    snapshot->valid_fields |= INFINIRT_RESOURCE_FIELD_MEMORY_CAPACITY;
+
+#if !defined(_WIN32) && (defined(ENABLE_NVIDIA_API) || defined(ENABLE_ILUVATAR_API))
+    (void)tryPopulateNvmlUtilization(device_id, snapshot);
+#endif
+    populateCommunicationSnapshot(device_id, snapshot);
+
+    return INFINI_STATUS_SUCCESS;
+}
+
+void recordCommunicationSample(int device_id, infinirtEvent_t start_event, infinirtEvent_t end_event, uint64_t bytes) {
+    if (start_event == nullptr || end_event == nullptr || bytes == 0) {
+        return;
+    }
+
+    auto &store = communicationStatsStore();
+    std::lock_guard<std::mutex> lock(store.mutex);
+    store.per_device[device_id].pending.push_back(
+        PendingCommunicationSample{
+            static_cast<cudaEvent_t>(start_event),
+            static_cast<cudaEvent_t>(end_event),
+            bytes});
 }
 
 infiniStatus_t deviceSynchronize() {
