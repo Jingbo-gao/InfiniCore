@@ -5,10 +5,6 @@ end
 
 local CUTLASS_ROOT = os.getenv("CUTLASS_ROOT") or os.getenv("CUTLASS_HOME") or os.getenv("CUTLASS_PATH")
 
-if CUTLASS_ROOT ~= nil then
-    add_includedirs(CUTLASS_ROOT)
-end
-
 local FLASH_ATTN_ROOT = get_config("flash-attn")
 
 local INFINI_ROOT = os.getenv("INFINI_ROOT") or (os.getenv(is_host("windows") and "HOMEPATH" or "HOME") .. "/.infini")
@@ -38,6 +34,40 @@ target("infiniop-nvidia")
             target:add("linkdirs", path.directory(path.directory(nvcc_path)) .. "/lib64/stubs")
             target:add("links", "cuda")
         end
+
+        -- Auto-detect CUDA arch when no explicit --cuda_arch
+        local arch_opt = get_config("cuda_arch")
+        if not arch_opt or type(arch_opt) ~= "string" then
+            local ok, sm_str = os.iorunv("nvidia-smi", {"--query-gpu=compute_cap", "--format=csv,noheader,nounits"})
+            if ok and sm_str then
+                local major, minor = sm_str:match("(%d+)%.(%d+)")
+                if major then
+                    local sm = tonumber(major) * 10 + tonumber(minor)
+                    local archs = {}
+                    if sm >= 75 then table.insert(archs, "sm_75") end
+                    if sm >= 80 then table.insert(archs, "sm_80") end
+                    if sm >= 86 then table.insert(archs, "sm_86") end
+                    if sm >= 89 then table.insert(archs, "sm_89") end
+                    -- H100 (sm_90a): use sm_90a for cutlass 3.x
+                    if sm == 90 then
+                        target:add("cuflags", "-gencode=arch=compute_90a,code=sm_90a")
+                    elseif sm > 90 then
+                        table.insert(archs, "sm_90")
+                    end
+                    if #archs == 0 then
+                        target:add("cugencodes", "native")
+                    end
+                    for _, arch in ipairs(archs) do
+                        local compute = arch:gsub("sm_", "compute_")
+                        target:add("cuflags", "-gencode=arch=" .. compute .. ",code=" .. arch)
+                    end
+                else
+                    target:add("cugencodes", "native")
+                end
+            else
+                target:add("cugencodes", "native")
+            end
+        end
     end)
 
     if is_plat("windows") then
@@ -63,6 +93,12 @@ target("infiniop-nvidia")
 
     add_cuflags("-Xcompiler=-Wno-error=deprecated-declarations", "-Xcompiler=-Wno-error=unused-function")
 
+    -- Cutlass: enable I8 Gemm when CUTLASS_ROOT is set
+    if CUTLASS_ROOT ~= nil then
+        add_defines("ENABLE_CUTLASS_API")
+        add_includedirs(CUTLASS_ROOT, CUTLASS_ROOT .. "/include", CUTLASS_ROOT .. "/tools/util/include")
+    end
+
     local arch_opt = get_config("cuda_arch")
     if arch_opt and type(arch_opt) == "string" then
         for _, arch in ipairs(arch_opt:split(",")) do
@@ -70,8 +106,6 @@ target("infiniop-nvidia")
             local compute = arch:gsub("sm_", "compute_")
             add_cuflags("-gencode=arch=" .. compute .. ",code=" .. arch)
         end
-    else
-        add_cugencodes("native")
     end
 
     set_languages("cxx17")
@@ -151,13 +185,15 @@ target("flash-attn-nvidia")
             local PYTHON_INCLUDE = os.iorunv("python", {"-c", "import sysconfig; print(sysconfig.get_paths()['include'])"}):trim()
             local PYTHON_LIB_DIR = os.iorunv("python", {"-c", "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))"}):trim()
             local LIB_PYTHON = os.iorunv("python", {"-c", "import glob,sysconfig,os;print(glob.glob(os.path.join(sysconfig.get_config_var('LIBDIR'),'libpython*.so'))[0])"}):trim()
-            
+
             -- Include dirs (needed for both device and host)
             target:add("includedirs", FLASH_ATTN_ROOT .. "/csrc/flash_attn/src", {public = false})
             target:add("includedirs", TORCH_DIR .. "/include/torch/csrc/api/include", {public = false})
             target:add("includedirs", TORCH_DIR .. "/include", {public = false})
             target:add("includedirs", PYTHON_INCLUDE, {public = false})
-            target:add("includedirs", CUTLASS_ROOT .. "/include", {public = false})
+            if CUTLASS_ROOT ~= nil then
+                target:add("includedirs", CUTLASS_ROOT .. "/include", {public = false})
+            end
             target:add("includedirs", FLASH_ATTN_ROOT .. "/csrc/flash_attn", {public = false})
 
             -- Link libraries
@@ -167,10 +203,10 @@ target("flash-attn-nvidia")
 
         add_files(FLASH_ATTN_ROOT .. "/csrc/flash_attn/flash_api.cpp")
         add_files(FLASH_ATTN_ROOT .. "/csrc/flash_attn/src/*.cu")
-        
+
         -- Link options
         add_ldflags("-Wl,--no-undefined", {force = true})
-        
+
         -- Compile options
         add_cxflags("-fPIC", {force = true})
         add_cuflags("-Xcompiler=-fPIC")
