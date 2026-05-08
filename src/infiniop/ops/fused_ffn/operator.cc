@@ -38,17 +38,17 @@ __INFINI_C infiniStatus_t infiniopCreateFusedFFNDescriptor(
     infiniopTensorDescriptor_t down_weight_desc,
     float epsilon) {
 
-#define CREATE(CASE, NAMESPACE)                                                     \
-    case CASE:                                                                      \
-        return op::fused_ffn::NAMESPACE::Descriptor::create(                        \
-            handle,                                                                 \
-            reinterpret_cast<op::fused_ffn::NAMESPACE::Descriptor **>(desc_ptr),    \
-            out_desc,                                                               \
-            in_desc,                                                                \
-            residual_desc,                                                          \
-            norm_weight_desc,                                                       \
-            gate_up_weight_desc,                                                    \
-            down_weight_desc,                                                       \
+#define CREATE(CASE, NAMESPACE)                                                  \
+    case CASE:                                                                   \
+        return op::fused_ffn::NAMESPACE::Descriptor::create(                     \
+            handle,                                                              \
+            reinterpret_cast<op::fused_ffn::NAMESPACE::Descriptor **>(desc_ptr), \
+            out_desc,                                                            \
+            in_desc,                                                             \
+            residual_desc,                                                       \
+            norm_weight_desc,                                                    \
+            gate_up_weight_desc,                                                 \
+            down_weight_desc,                                                    \
             epsilon)
 
     switch (handle->device) {
@@ -89,9 +89,9 @@ __INFINI_C infiniStatus_t infiniopCreateFusedFFNDescriptor(
 __INFINI_C infiniStatus_t infiniopGetFusedFFNWorkspaceSize(
     infiniopFusedFFNDescriptor_t desc, size_t *size) {
 
-#define GET(CASE, NAMESPACE)                                                                      \
-    case CASE:                                                                                    \
-        *size = reinterpret_cast<op::fused_ffn::NAMESPACE::Descriptor *>(desc)->workspaceSize();  \
+#define GET(CASE, NAMESPACE)                                                                     \
+    case CASE:                                                                                   \
+        *size = reinterpret_cast<op::fused_ffn::NAMESPACE::Descriptor *>(desc)->workspaceSize(); \
         return INFINI_STATUS_SUCCESS
 
     switch (desc->device_type) {
@@ -142,10 +142,10 @@ __INFINI_C infiniStatus_t infiniopFusedFFN(
     const void *down_weight,
     void *stream) {
 
-#define CALCULATE(CASE, NAMESPACE)                                                     \
-    case CASE:                                                                         \
-        return reinterpret_cast<const op::fused_ffn::NAMESPACE::Descriptor *>(desc)    \
-            ->calculate(workspace, workspace_size, out, in, residual,                  \
+#define CALCULATE(CASE, NAMESPACE)                                                  \
+    case CASE:                                                                      \
+        return reinterpret_cast<const op::fused_ffn::NAMESPACE::Descriptor *>(desc) \
+            ->calculate(workspace, workspace_size, out, in, residual,               \
                         norm_weight, gate_up_weight, down_weight, stream)
 
     switch (desc->device_type) {
@@ -189,9 +189,9 @@ __INFINI_C infiniStatus_t infiniopDestroyFusedFFNDescriptor(
         return INFINI_STATUS_SUCCESS;
     }
 
-#define DESTROY(CASE, NAMESPACE)                                                   \
-    case CASE:                                                                     \
-        delete reinterpret_cast<op::fused_ffn::NAMESPACE::Descriptor *>(desc);     \
+#define DESTROY(CASE, NAMESPACE)                                               \
+    case CASE:                                                                 \
+        delete reinterpret_cast<op::fused_ffn::NAMESPACE::Descriptor *>(desc); \
         return INFINI_STATUS_SUCCESS
 
     switch (desc->device_type) {

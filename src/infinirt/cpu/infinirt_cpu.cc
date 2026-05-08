@@ -15,19 +15,26 @@ infiniStatus_t setDevice(int device_id) {
 }
 
 infiniStatus_t getMemInfo(int device_id, size_t *free_bytes, size_t *total_bytes) {
-    // CPU backend: report system memory info via /proc/meminfo (Linux)
+    (void)device_id;
     *free_bytes = 0;
     *total_bytes = 0;
+#ifndef _WIN32
+    // Linux: report system memory info via /proc/meminfo
     FILE *fp = fopen("/proc/meminfo", "r");
     if (fp) {
         char label[64];
         size_t value;
         while (fscanf(fp, "%63s %zu %*s", label, &value) == 2) {
-            if (strcmp(label, "MemTotal:") == 0) *total_bytes = value * 1024;
-            if (strcmp(label, "MemAvailable:") == 0) *free_bytes = value * 1024;
+            if (strcmp(label, "MemTotal:") == 0) {
+                *total_bytes = value * 1024;
+            }
+            if (strcmp(label, "MemAvailable:") == 0) {
+                *free_bytes = value * 1024;
+            }
         }
         fclose(fp);
     }
+#endif
     if (*total_bytes == 0) {
         return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
     }
@@ -38,7 +45,9 @@ infiniStatus_t getDeviceResourceSnapshot(int device_id, infinirtDeviceResourceSn
     memset(snapshot, 0, sizeof(*snapshot));
     size_t free_bytes = 0, total_bytes = 0;
     auto status = getMemInfo(device_id, &free_bytes, &total_bytes);
-    if (status != INFINI_STATUS_SUCCESS) return status;
+    if (status != INFINI_STATUS_SUCCESS) {
+        return status;
+    }
     snapshot->total_bytes = total_bytes;
     snapshot->free_bytes = free_bytes;
     snapshot->used_bytes = total_bytes - free_bytes;

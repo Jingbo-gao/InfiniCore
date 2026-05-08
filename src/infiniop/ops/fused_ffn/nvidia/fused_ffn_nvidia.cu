@@ -86,9 +86,9 @@ struct Descriptor::Opaque {
 
     // Workspace slab sizes (bytes), padded to kWsAlign.
     size_t normalized_bytes = 0;
-    size_t gate_up_bytes    = 0;
-    size_t hidden_bytes     = 0;
-    size_t inner_ws_bytes   = 0; // max of sub-descriptor workspaceSize()
+    size_t gate_up_bytes = 0;
+    size_t hidden_bytes = 0;
+    size_t inner_ws_bytes = 0; // max of sub-descriptor workspaceSize()
 
     bool has_residual = false;
 
@@ -108,10 +108,10 @@ struct Descriptor::Opaque {
     // Sub-descriptors owned by this fused op; each one is a standard
     // InfiniopDescriptor for the corresponding standalone operator.
     std::unique_ptr<op::rms_norm::nvidia::Descriptor> rms_norm;
-    std::unique_ptr<op::gemm::nvidia::Descriptor>     gate_up_gemm;
-    std::unique_ptr<op::swiglu::nvidia::Descriptor>   swiglu;
-    std::unique_ptr<op::gemm::nvidia::Descriptor>     down_gemm;
-    std::unique_ptr<op::add::nvidia::Descriptor>      residual_add;
+    std::unique_ptr<op::gemm::nvidia::Descriptor> gate_up_gemm;
+    std::unique_ptr<op::swiglu::nvidia::Descriptor> swiglu;
+    std::unique_ptr<op::gemm::nvidia::Descriptor> down_gemm;
+    std::unique_ptr<op::add::nvidia::Descriptor> residual_add;
 };
 
 Descriptor::~Descriptor() {
@@ -138,12 +138,12 @@ infiniStatus_t Descriptor::create(
     auto handle = reinterpret_cast<device::nvidia::Handle *>(handle_);
 
     auto opaque = std::make_unique<Opaque>();
-    opaque->internal     = handle->internal();
+    opaque->internal = handle->internal();
     opaque->has_residual = info.has_residual;
 
     const size_t ntok = info.ntok();
-    const size_t d    = info.d();
-    const size_t di   = info.di();
+    const size_t d = info.d();
+    const size_t di = info.di();
     const size_t dtype_sz = infiniSizeOf(info.dtype);
 
     // Profile-driven scheduler for the deep-fused kernel path.
@@ -164,7 +164,9 @@ infiniStatus_t Descriptor::create(
             const char *thr = std::getenv("INFINIOP_FUSED_FFN_DEEP_MAX_NTOK");
             if (thr != nullptr) {
                 max_ntok = static_cast<size_t>(std::atol(thr));
-                if (max_ntok == 0) max_ntok = 4;
+                if (max_ntok == 0) {
+                    max_ntok = 4;
+                }
             }
             opaque->use_deep_fused = (ntok <= max_ntok);
         }
@@ -199,9 +201,9 @@ infiniStatus_t Descriptor::create(
     // The compact hidden slab (stride=di instead of stride=2*di) gives the
     // Down-GEMM a tightly packed K dimension, which matters on BIV150 where
     // cuBLAS 10.2 tensor-core paths prefer aligned contiguous leading dims.
-    opaque->normalized_bytes = alignUp(ntok * d      * dtype_sz, kWsAlign);
-    opaque->gate_up_bytes    = alignUp(ntok * 2 * di * dtype_sz, kWsAlign);
-    opaque->hidden_bytes     = alignUp(ntok * di     * dtype_sz, kWsAlign);
+    opaque->normalized_bytes = alignUp(ntok * d * dtype_sz, kWsAlign);
+    opaque->gate_up_bytes = alignUp(ntok * 2 * di * dtype_sz, kWsAlign);
+    opaque->hidden_bytes = alignUp(ntok * di * dtype_sz, kWsAlign);
 
     DescScope scope;
 
@@ -219,8 +221,7 @@ infiniStatus_t Descriptor::create(
             normalized_desc, in_view, norm_weight_desc,
             info.epsilon));
         opaque->rms_norm.reset(sub);
-        opaque->inner_ws_bytes =
-            std::max(opaque->inner_ws_bytes, sub->workspaceSize());
+        opaque->inner_ws_bytes = std::max(opaque->inner_ws_bytes, sub->workspaceSize());
     }
 
     // ── GateUp GEMM sub-descriptor ──
@@ -235,8 +236,7 @@ infiniStatus_t Descriptor::create(
         CHECK_STATUS(op::gemm::nvidia::Descriptor::create(
             handle_, &sub, gate_up_c_desc, normalized_desc, gate_up_b_desc));
         opaque->gate_up_gemm.reset(sub);
-        opaque->inner_ws_bytes =
-            std::max(opaque->inner_ws_bytes, sub->workspaceSize());
+        opaque->inner_ws_bytes = std::max(opaque->inner_ws_bytes, sub->workspaceSize());
     }
 
     // ── SwiGLU sub-descriptor ──
@@ -256,8 +256,7 @@ infiniStatus_t Descriptor::create(
         CHECK_STATUS(op::swiglu::nvidia::Descriptor::create(
             handle_, &sub, hidden_desc, {half_desc, half_desc}));
         opaque->swiglu.reset(sub);
-        opaque->inner_ws_bytes =
-            std::max(opaque->inner_ws_bytes, sub->workspaceSize());
+        opaque->inner_ws_bytes = std::max(opaque->inner_ws_bytes, sub->workspaceSize());
     }
 
     // ── Down GEMM sub-descriptor ──
@@ -274,8 +273,7 @@ infiniStatus_t Descriptor::create(
         CHECK_STATUS(op::gemm::nvidia::Descriptor::create(
             handle_, &sub, out_view, hidden_desc, down_b_desc));
         opaque->down_gemm.reset(sub);
-        opaque->inner_ws_bytes =
-            std::max(opaque->inner_ws_bytes, sub->workspaceSize());
+        opaque->inner_ws_bytes = std::max(opaque->inner_ws_bytes, sub->workspaceSize());
     }
 
     // ── Residual add sub-descriptor (optional) ──
@@ -293,15 +291,10 @@ infiniStatus_t Descriptor::create(
             handle_, &sub,
             out_view_for_add, {out_view_for_add, residual_view}));
         opaque->residual_add.reset(sub);
-        opaque->inner_ws_bytes =
-            std::max(opaque->inner_ws_bytes, sub->workspaceSize());
+        opaque->inner_ws_bytes = std::max(opaque->inner_ws_bytes, sub->workspaceSize());
     }
 
-    const size_t workspace_size =
-        opaque->normalized_bytes +
-        opaque->gate_up_bytes +
-        opaque->hidden_bytes +
-        alignUp(opaque->inner_ws_bytes, kWsAlign);
+    const size_t workspace_size = opaque->normalized_bytes + opaque->gate_up_bytes + opaque->hidden_bytes + alignUp(opaque->inner_ws_bytes, kWsAlign);
 
     *desc_ptr = new Descriptor(
         opaque.release(),
@@ -325,16 +318,19 @@ infiniStatus_t Descriptor::calculate(
         return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
     }
 
-    const size_t di       = _info.di();
+    const size_t di = _info.di();
     const size_t dtype_sz = infiniSizeOf(_info.dtype);
 
     // Partition the workspace into the three persistent slabs plus an
     // inner scratch buffer shared by all sub-descriptors.
     char *ws = static_cast<char *>(workspace);
-    void *normalized_buf = ws; ws += _opaque->normalized_bytes;
-    void *gate_up_buf    = ws; ws += _opaque->gate_up_bytes;
-    void *hidden_buf     = ws; ws += _opaque->hidden_bytes;
-    void *inner_ws       = ws;
+    void *normalized_buf = ws;
+    ws += _opaque->normalized_bytes;
+    void *gate_up_buf = ws;
+    ws += _opaque->gate_up_bytes;
+    void *hidden_buf = ws;
+    ws += _opaque->hidden_bytes;
+    void *inner_ws = ws;
     const size_t inner_ws_size = _opaque->inner_ws_bytes;
 
     // gate and up are two halves of the interleaved gate_up buffer.
@@ -344,7 +340,7 @@ infiniStatus_t Descriptor::calculate(
     // shared half_desc at create time).
     const char *gu_bytes = static_cast<const char *>(gate_up_buf);
     const void *gate_ptr = gu_bytes;
-    const void *up_ptr   = gu_bytes + di * dtype_sz;
+    const void *up_ptr = gu_bytes + di * dtype_sz;
 
     // Stage 1: RMSNorm
     CHECK_STATUS(_opaque->rms_norm->calculate(
@@ -365,17 +361,17 @@ infiniStatus_t Descriptor::calculate(
         dim3 grid(static_cast<unsigned>(ntok), static_cast<unsigned>(di));
         dim3 block(kBlock);
 
-#define DEEP_FUSED_LAUNCH(TD, TW)                                        \
-    deepFusedGateUpSiluKernel<kBlock, float, TD, TW>                    \
-        <<<grid, block, 0, cuda_stream>>>(                              \
-            reinterpret_cast<TD *>(hidden_buf),                          \
-            reinterpret_cast<const TD *>(normalized_buf),                \
-            reinterpret_cast<const TW *>(gate_up_weight),                \
-            ntok, d, di,                                                 \
-            static_cast<ptrdiff_t>(d),                                   \
-            static_cast<ptrdiff_t>(di),                                  \
-            _opaque->gate_up_w_k_stride,                                 \
-            _opaque->gate_up_w_col_stride,                               \
+#define DEEP_FUSED_LAUNCH(TD, TW)                         \
+    deepFusedGateUpSiluKernel<kBlock, float, TD, TW>      \
+        <<<grid, block, 0, cuda_stream>>>(                \
+            reinterpret_cast<TD *>(hidden_buf),           \
+            reinterpret_cast<const TD *>(normalized_buf), \
+            reinterpret_cast<const TW *>(gate_up_weight), \
+            ntok, d, di,                                  \
+            static_cast<ptrdiff_t>(d),                    \
+            static_cast<ptrdiff_t>(di),                   \
+            _opaque->gate_up_w_k_stride,                  \
+            _opaque->gate_up_w_col_stride,                \
             /*gate_col_base=*/0u, /*up_col_base=*/di)
 
         if (_info.dtype == INFINI_DTYPE_F16 && _info.mtype == INFINI_DTYPE_F16) {
@@ -416,8 +412,7 @@ infiniStatus_t Descriptor::calculate(
     // Stage 4: Down GEMM, with optional in-place residual fuse via beta=1.
     //   fuse path : out = 1.0 * out + hidden_buf @ down_weight
     //   plain path: out = 0.0 * out + hidden_buf @ down_weight
-    const bool fuse_residual =
-        _opaque->has_residual && (out == residual);
+    const bool fuse_residual = _opaque->has_residual && (out == residual);
     CHECK_STATUS(_opaque->down_gemm->calculate(
         inner_ws, inner_ws_size,
         out, /*beta=*/fuse_residual ? 1.f : 0.f,

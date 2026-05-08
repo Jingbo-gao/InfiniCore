@@ -13,22 +13,22 @@ namespace {
 
 using namespace infinicore::analyzer;
 
-#define MA_ASSERT_TRUE(cond)                                                  \
-    do {                                                                      \
-        if (!(cond)) {                                                        \
-            spdlog::error("ASSERT_TRUE failed: {} ({}:{})",                   \
-                          #cond, __FILE__, __LINE__);                         \
-            return false;                                                     \
-        }                                                                     \
+#define MA_ASSERT_TRUE(cond)                                \
+    do {                                                    \
+        if (!(cond)) {                                      \
+            spdlog::error("ASSERT_TRUE failed: {} ({}:{})", \
+                          #cond, __FILE__, __LINE__);       \
+            return false;                                   \
+        }                                                   \
     } while (0)
 
-#define MA_ASSERT_EQ(a, b)                                                    \
-    do {                                                                      \
-        if (!((a) == (b))) {                                                  \
-            spdlog::error("ASSERT_EQ failed: {} == {} ({}:{})",               \
-                          #a, #b, __FILE__, __LINE__);                        \
-            return false;                                                     \
-        }                                                                     \
+#define MA_ASSERT_EQ(a, b)                                      \
+    do {                                                        \
+        if (!((a) == (b))) {                                    \
+            spdlog::error("ASSERT_EQ failed: {} == {} ({}:{})", \
+                          #a, #b, __FILE__, __LINE__);          \
+            return false;                                       \
+        }                                                       \
     } while (0)
 
 std::vector<OpTraceEntry> makeWindow(const std::vector<OpType> &types,

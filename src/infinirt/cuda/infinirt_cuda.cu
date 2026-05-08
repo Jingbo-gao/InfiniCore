@@ -1,9 +1,9 @@
 #include "../../utils.h"
 #include "infinirt_cuda.cuh"
-#include <cuda_runtime.h>
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <cuda_runtime.h>
 #include <deque>
 #include <mutex>
 #include <unordered_map>
@@ -108,10 +108,9 @@ void flushCompletedCommunicationSamples(int device_id, DeviceCommunicationState 
                 float elapsed_ms = 0.0f;
                 auto elapsed_status = cudaEventElapsedTime(&elapsed_ms, sample.start_event, sample.end_event);
                 if (elapsed_status == cudaSuccess) {
-                    state.recent.push_back({
-                        std::chrono::steady_clock::now(),
-                        static_cast<double>(elapsed_ms),
-                        sample.bytes});
+                    state.recent.push_back({std::chrono::steady_clock::now(),
+                                            static_cast<double>(elapsed_ms),
+                                            sample.bytes});
                 }
                 destroyCommunicationSample(sample);
             } else if (query_status == cudaErrorNotReady) {
@@ -221,9 +220,9 @@ NvmlApi &nvmlApi() {
         loaded.get_utilization_rates = reinterpret_cast<NvmlDeviceGetUtilizationRatesFn>(dlsym(loaded.handle, "nvmlDeviceGetUtilizationRates"));
 
         loaded.available = loaded.init_v2 != nullptr
-                           && loaded.shutdown != nullptr
-                           && loaded.get_handle_by_index_v2 != nullptr
-                           && loaded.get_utilization_rates != nullptr;
+                        && loaded.shutdown != nullptr
+                        && loaded.get_handle_by_index_v2 != nullptr
+                        && loaded.get_utilization_rates != nullptr;
         return loaded;
     }();
     return api;
@@ -256,8 +255,8 @@ bool tryPopulateNvmlUtilization(int device_id, infinirtDeviceResourceSnapshot_t 
     snapshot->memory_bandwidth_utilization = static_cast<float>(util.memory) / 100.0f;
     snapshot->kernel_time_ratio = snapshot->compute_utilization;
     snapshot->valid_fields |= INFINIRT_RESOURCE_FIELD_COMPUTE_UTILIZATION
-                              | INFINIRT_RESOURCE_FIELD_MEMORY_BANDWIDTH_UTILIZATION
-                              | INFINIRT_RESOURCE_FIELD_KERNEL_TIME_RATIO;
+                            | INFINIRT_RESOURCE_FIELD_MEMORY_BANDWIDTH_UTILIZATION
+                            | INFINIRT_RESOURCE_FIELD_KERNEL_TIME_RATIO;
     snapshot->estimated_fields |= INFINIRT_RESOURCE_FIELD_KERNEL_TIME_RATIO;
     return true;
 }

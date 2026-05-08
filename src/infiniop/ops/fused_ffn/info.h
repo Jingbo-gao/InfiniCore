@@ -122,16 +122,13 @@ public:
         {
             size_t dw_dim0 = down_weight_desc->dim(0);
             size_t dw_dim1 = down_weight_desc->dim(1);
-            if (!((dw_dim0 == hidden_dim && dw_dim1 == intermediate_dim) ||
-                  (dw_dim0 == intermediate_dim && dw_dim1 == hidden_dim))) {
+            if (!((dw_dim0 == hidden_dim && dw_dim1 == intermediate_dim) || (dw_dim0 == intermediate_dim && dw_dim1 == hidden_dim))) {
                 return INFINI_STATUS_BAD_TENSOR_SHAPE;
             }
         }
 
         // Check contiguity of the last dimension for activation tensors and norm weights
-        if (out_desc->stride(out_ndim - 1) != 1 ||
-            in_desc->stride(in_ndim - 1) != 1 ||
-            norm_weight_desc->stride(0) != 1) {
+        if (out_desc->stride(out_ndim - 1) != 1 || in_desc->stride(in_ndim - 1) != 1 || norm_weight_desc->stride(0) != 1) {
             return INFINI_STATUS_BAD_TENSOR_STRIDES;
         }
         // For matrix weights, at least one stride dimension must be 1 (contiguous along one axis)

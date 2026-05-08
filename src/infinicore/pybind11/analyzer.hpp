@@ -11,7 +11,7 @@ namespace infinicore::analyzer::pybind {
 
 inline void bind(py::module &m) {
     auto analyzer_mod = m.def_submodule("analyzer",
-        "Hardware-Task Mutual Awareness Analysis Module");
+                                        "Hardware-Task Mutual Awareness Analysis Module");
 
     // --- Enums ---
     py::enum_<PhaseType>(analyzer_mod, "PhaseType")
@@ -121,12 +121,12 @@ inline void bind(py::module &m) {
 
     // --- Top-level functions ---
     analyzer_mod.def("analyze", &analyzeCurrentState,
-        "Analyze current state and return an OptimizationIntent");
+                     "Analyze current state and return an OptimizationIntent");
     analyzer_mod.def("get_current_phase", &getCurrentPhase,
-        "Get the current detected task phase");
+                     "Get the current detected task phase");
     analyzer_mod.def("set_enabled", &setAnalyzerEnabled,
-        "Enable/disable the mutual awareness analyzer",
-        py::arg("enabled"));
+                     "Enable/disable the mutual awareness analyzer",
+                     py::arg("enabled"));
     analyzer_mod.def(
         "trace_op_for_test",
         [](OpType op_type,
@@ -142,15 +142,17 @@ inline void bind(py::module &m) {
         py::arg("dtype") = 0,
         py::arg("device_type") = 0,
         py::arg("device_id") = 0);
-    analyzer_mod.def("clear_trace", []() {
-        getGlobalOpTrace().clear();
-        MutualAwarenessAnalyzer::instance().clearGraphCache();
-    }, "Clear the global OpTrace ring and analyzer graph cache");
+    analyzer_mod.def(
+        "clear_trace", []() {
+            getGlobalOpTrace().clear();
+            MutualAwarenessAnalyzer::instance().clearGraphCache();
+        },
+        "Clear the global OpTrace ring and analyzer graph cache");
 
     // --- Access to analyzer instance for advanced usage ---
     analyzer_mod.def("get_analyzer", &MutualAwarenessAnalyzer::instance,
-        py::return_value_policy::reference,
-        "Get the MutualAwarenessAnalyzer singleton instance");
+                     py::return_value_policy::reference,
+                     "Get the MutualAwarenessAnalyzer singleton instance");
 
     py::class_<MutualAwarenessAnalyzer>(analyzer_mod, "MutualAwarenessAnalyzer")
         .def("analyze", py::overload_cast<>(&MutualAwarenessAnalyzer::analyze))

@@ -15,8 +15,8 @@ DeviceResourceSnapshot buildSnapshotFromMemoryStats(
     snapshot.device_type = device_type;
     snapshot.has_memory_capacity = stats.total_capacity > 0;
     snapshot.free_bytes = stats.total_capacity >= stats.allocated_bytes
-        ? (stats.total_capacity - stats.allocated_bytes)
-        : 0;
+                            ? (stats.total_capacity - stats.allocated_bytes)
+                            : 0;
     snapshot.total_bytes = stats.total_capacity;
     snapshot.used_bytes = stats.allocated_bytes;
     snapshot.reserved_bytes = stats.total_capacity;
@@ -233,7 +233,9 @@ const OptimizationIntent &MutualAwarenessAnalyzer::lastIntent() const {
 // ============================================================
 
 void MutualAwarenessAnalyzer::onGraphRecordingStop() {
-    if (!enabled_) return;
+    if (!enabled_) {
+        return;
+    }
 
     // Analyze the op sequence recorded during graph capture
     // and cache the result. Graph ops are static, so we only

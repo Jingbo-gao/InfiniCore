@@ -125,7 +125,7 @@ infiniStatus_t calculateTyped(
     {
         bool fuse_residual = info.has_residual && (out_ptr == residual_ptr);
         for (size_t t = 0; t < ntok; t++) {
-            const Tdata *hidden = gate_up_buf + t * 2 * di;  // stride = 2*di to match non-fused
+            const Tdata *hidden = gate_up_buf + t * 2 * di; // stride = 2*di to match non-fused
             Tdata *o = out_ptr + t * info.out_stride;
 
             if (fuse_residual) {
