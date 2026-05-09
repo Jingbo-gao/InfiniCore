@@ -97,6 +97,7 @@
 #include "ops/tan.hpp"
 #include "ops/tanhshrink.hpp"
 #include "ops/topk.hpp"
+#include "ops/topksoftmax.hpp"
 #include "ops/triplet_margin_loss.hpp"
 #include "ops/triplet_margin_with_distance_loss.hpp"
 #include "ops/unfold.hpp"
@@ -218,6 +219,7 @@ inline void bind(py::module &m) {
     bind_selu(m);
     bind_sinh(m);
     bind_layer_norm(m);
+    bind_topksoftmax(m);
 }
 
 } // namespace infinicore::ops
