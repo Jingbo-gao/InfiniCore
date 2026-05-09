@@ -1,9 +1,8 @@
 #pragma once
 
+#include "infinicore.hpp"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-
-#include "infinicore.hpp"
 
 namespace py = pybind11;
 
@@ -38,7 +37,20 @@ inline void bind(py::module &m) {
         .def("unsqueeze", [](const Tensor &tensor, std::size_t dim) { return tensor->unsqueeze(dim); })
         .def("squeeze", [](const Tensor &tensor, std::size_t dim) { return tensor->squeeze(dim); })
         .def("reset", static_cast<void (Tensor::*)() noexcept>(&Tensor::reset))
-        .def("use_count", &Tensor::use_count);
+        .def("use_count", &Tensor::use_count)
+        .def("__str__", [](const Tensor &tensor) {
+            std::ostringstream oss;
+            oss << tensor;
+            return oss.str();
+        })
+        .def("__repr__", [](const Tensor &tensor) {
+            std::ostringstream oss;
+            oss << tensor;
+            return oss.str();
+        })
+        .def("__bool__", [](const Tensor &tensor) {
+            return bool(tensor);
+        });
 
     using EmptyFuncType = Tensor (*)(const Shape &, const DataType &, const Device &, bool);
     using StridedEmptyFuncType = Tensor (*)(const Shape &, const Strides &, const DataType &, const Device &, bool);
