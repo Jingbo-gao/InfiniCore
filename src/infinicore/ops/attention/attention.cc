@@ -1,6 +1,10 @@
 #include "infinicore/ops/attention.hpp"
 #include "../../utils.hpp"
 
+#ifdef ENABLE_MUTUAL_AWARENESS
+#include "infinicore/analyzer/mutual_awareness_analyzer.hpp"
+#endif
+
 namespace infinicore::op {
 
 common::OpDispatcher<Attention::schema> &Attention::dispatcher() {
@@ -11,7 +15,12 @@ common::OpDispatcher<Attention::schema> &Attention::dispatcher() {
 void Attention::execute(Tensor out, Tensor q, Tensor k, Tensor v, Tensor k_cache, Tensor v_cache, size_t pos) {
     INFINICORE_ASSERT_TENSORS_SAME_DEVICE(out, q, k, v, k_cache, v_cache);
     infinicore::context::setDevice(out->device());
+#ifdef ENABLE_MUTUAL_AWARENESS
+    auto goal = analyzer::MutualAwarenessAnalyzer::instance().getCurrentOptimizationGoal();
+    dispatcher().lookup(out->device().getType(), goal)(out, q, k, v, k_cache, v_cache, pos);
+#else
     dispatcher().lookup(out->device().getType())(out, q, k, v, k_cache, v_cache, pos);
+#endif
 }
 
 Tensor attention(Tensor q, Tensor k, Tensor v, Tensor k_cache, Tensor v_cache, size_t pos) {

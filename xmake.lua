@@ -265,6 +265,17 @@ if has_config("ccl") then
     add_defines("ENABLE_CCL")
 end
 
+-- Mutual Awareness Analyzer
+option("mutual-awareness")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable hardware-task mutual awareness analyzer and goal-aware kernel dispatch")
+option_end()
+
+if has_config("mutual-awareness") then
+    add_defines("ENABLE_MUTUAL_AWARENESS")
+end
+
 target("infini-utils")
     set_kind("static")
     on_install(function (target) end)
@@ -538,6 +549,9 @@ target("infinicore_cpp_api")
     add_files("src/infinicore/nn/*.cc")
     add_files("src/infinicore/ops/*/*.cc")
     add_files("src/infinicore/ops/*/*/*.cc")
+    if has_config("mutual-awareness") then
+        add_files("src/infinicore/analyzer/*.cc")
+    end
     add_files("src/utils/*.cc")
 
     set_installdir(INFINI_ROOT)

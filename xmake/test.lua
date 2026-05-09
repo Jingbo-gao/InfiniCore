@@ -87,6 +87,9 @@ target("infinicore-test")
     add_files(os.projectdir().."/src/infinicore/tensor/*.cc")
     add_files(os.projectdir().."/src/infinicore/ops/*/*.cc")
     add_files(os.projectdir().."/src/infinicore/nn/*.cc")
+    if has_config("mutual-awareness") then
+        add_files(os.projectdir().."/src/infinicore/analyzer/*.cc")
+    end
 
     add_files(os.projectdir().."/src/infinicore-test/**.cc")
     set_installdir(INFINI_ROOT)

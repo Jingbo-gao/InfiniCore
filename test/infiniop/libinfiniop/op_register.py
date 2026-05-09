@@ -2118,3 +2118,44 @@ def pixel_shuffle(lib):
     lib.infiniopDestroyPixelShuffleDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
+
+
+@OpRegister.operator
+def fused_ffn_(lib):
+    lib.infiniopCreateFusedFFNDescriptor.restype = c_int32
+    lib.infiniopCreateFusedFFNDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        c_float,
+    ]
+
+    lib.infiniopGetFusedFFNWorkspaceSize.restype = c_int32
+    lib.infiniopGetFusedFFNWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopFusedFFN.restype = c_int32
+    lib.infiniopFusedFFN.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyFusedFFNDescriptor.restype = c_int32
+    lib.infiniopDestroyFusedFFNDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
