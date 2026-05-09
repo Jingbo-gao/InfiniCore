@@ -1,6 +1,7 @@
 #ifdef ENABLE_METAX_MC_API
 #define hpccDataType macaDataType
 #define HPCC_R_32F MACA_R_32F
+#define HPCC_R_64F MACA_R_64F
 #define HPCC_R_16F MACA_R_16F
 #define HPCC_R_16BF MACA_R_16BF
 #define hpcc_bfloat162 maca_bfloat162
@@ -118,6 +119,28 @@
 #define hcblasGemmEx mcblasGemmEx
 #define hcblasCreate mcblasCreate
 #define hcblasComputeType_t mcblasComputeType_t
+#define hcblasSetPointerMode mcblasSetPointerMode
+#define hcblasIsamax mcblasIsamax
+#define hcblasIdamax mcblasIdamax
+#define hcblasIsamin mcblasIsamin
+#define hcblasIdamin mcblasIdamin
+#define hcblasSasum mcblasSasum
+#define hcblasDasum mcblasDasum
+#define hcblasAxpyEx mcblasAxpyEx
+#define hcblasScopy mcblasScopy
+#define hcblasDcopy mcblasDcopy
+#define hcblasDotEx mcblasDotEx
+#define hcblasNrm2Ex mcblasNrm2Ex
+#define hcblasRotEx mcblasRotEx
+#define hcblasSrotg mcblasSrotg
+#define hcblasDrotg mcblasDrotg
+#define hcblasSrotm mcblasSrotm
+#define hcblasDrotm mcblasDrotm
+#define hcblasSrotmg mcblasSrotmg
+#define hcblasDrotmg mcblasDrotmg
+#define hcblasScalEx mcblasScalEx
+#define hcblasSswap mcblasSswap
+#define hcblasDswap mcblasDswap
 #define HCBLAS_STATUS_SUCCESS MCBLAS_STATUS_SUCCESS
 #define HCBLAS_OP_T MCBLAS_OP_T
 #define HCBLAS_OP_N MCBLAS_OP_N
@@ -125,6 +148,8 @@
 #define HCBLAS_GEMM_DEFAULT MCBLAS_GEMM_DEFAULT
 #define HCBLAS_COMPUTE_32F_FAST_TF32 MCBLAS_COMPUTE_32F_FAST_TF32
 #define HCBLAS_COMPUTE_32F MCBLAS_COMPUTE_32F
+#define HCBLAS_POINTER_MODE_DEVICE MCBLAS_POINTER_MODE_DEVICE
+#define HCBLAS_POINTER_MODE_HOST MCBLAS_POINTER_MODE_HOST
 #define __hpcc_fp8_e4m3 __maca_fp8_e4m3
 #define __hpcc_bfloat16 __maca_bfloat16
 #endif

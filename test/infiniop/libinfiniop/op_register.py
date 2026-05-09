@@ -1353,6 +1353,7 @@ def gptq_qyblas_gemm_(lib):
         infiniopOperatorDescriptor_t,
     ]
 
+
 @OpRegister.operator
 def softplus_(lib):
     lib.infiniopCreateSoftplusDescriptor.restype = c_int32
@@ -2157,5 +2158,441 @@ def fused_ffn_(lib):
 
     lib.infiniopDestroyFusedFFNDescriptor.restype = c_int32
     lib.infiniopDestroyFusedFFNDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def blas_amax_(lib):
+    lib.infiniopCreateBlasAmaxDescriptor.restype = c_int32
+    lib.infiniopCreateBlasAmaxDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetBlasAmaxWorkspaceSize.restype = c_int32
+    lib.infiniopGetBlasAmaxWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopBlasAmax.restype = c_int32
+    lib.infiniopBlasAmax.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyBlasAmaxDescriptor.restype = c_int32
+    lib.infiniopDestroyBlasAmaxDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def blas_amin_(lib):
+    lib.infiniopCreateBlasAminDescriptor.restype = c_int32
+    lib.infiniopCreateBlasAminDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetBlasAminWorkspaceSize.restype = c_int32
+    lib.infiniopGetBlasAminWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopBlasAmin.restype = c_int32
+    lib.infiniopBlasAmin.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyBlasAminDescriptor.restype = c_int32
+    lib.infiniopDestroyBlasAminDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def asum_(lib):
+    lib.infiniopCreateAsumDescriptor.restype = c_int32
+    lib.infiniopCreateAsumDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetAsumWorkspaceSize.restype = c_int32
+    lib.infiniopGetAsumWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopAsum.restype = c_int32
+    lib.infiniopAsum.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyAsumDescriptor.restype = c_int32
+    lib.infiniopDestroyAsumDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def axpy_(lib):
+    lib.infiniopCreateAxpyDescriptor.restype = c_int32
+    lib.infiniopCreateAxpyDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetAxpyWorkspaceSize.restype = c_int32
+    lib.infiniopGetAxpyWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopAxpy.restype = c_int32
+    lib.infiniopAxpy.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyAxpyDescriptor.restype = c_int32
+    lib.infiniopDestroyAxpyDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def blas_copy_(lib):
+    lib.infiniopCreateBlasCopyDescriptor.restype = c_int32
+    lib.infiniopCreateBlasCopyDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetBlasCopyWorkspaceSize.restype = c_int32
+    lib.infiniopGetBlasCopyWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopBlasCopy.restype = c_int32
+    lib.infiniopBlasCopy.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyBlasCopyDescriptor.restype = c_int32
+    lib.infiniopDestroyBlasCopyDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def blas_dot_(lib):
+    lib.infiniopCreateBlasDotDescriptor.restype = c_int32
+    lib.infiniopCreateBlasDotDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetBlasDotWorkspaceSize.restype = c_int32
+    lib.infiniopGetBlasDotWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopBlasDot.restype = c_int32
+    lib.infiniopBlasDot.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyBlasDotDescriptor.restype = c_int32
+    lib.infiniopDestroyBlasDotDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def nrm2_(lib):
+    lib.infiniopCreateNrm2Descriptor.restype = c_int32
+    lib.infiniopCreateNrm2Descriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetNrm2WorkspaceSize.restype = c_int32
+    lib.infiniopGetNrm2WorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopNrm2.restype = c_int32
+    lib.infiniopNrm2.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyNrm2Descriptor.restype = c_int32
+    lib.infiniopDestroyNrm2Descriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def rot_(lib):
+    lib.infiniopCreateRotDescriptor.restype = c_int32
+    lib.infiniopCreateRotDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetRotWorkspaceSize.restype = c_int32
+    lib.infiniopGetRotWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopRot.restype = c_int32
+    lib.infiniopRot.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyRotDescriptor.restype = c_int32
+    lib.infiniopDestroyRotDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def rotg_(lib):
+    lib.infiniopCreateRotgDescriptor.restype = c_int32
+    lib.infiniopCreateRotgDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetRotgWorkspaceSize.restype = c_int32
+    lib.infiniopGetRotgWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopRotg.restype = c_int32
+    lib.infiniopRotg.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyRotgDescriptor.restype = c_int32
+    lib.infiniopDestroyRotgDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def rotm_(lib):
+    lib.infiniopCreateRotmDescriptor.restype = c_int32
+    lib.infiniopCreateRotmDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetRotmWorkspaceSize.restype = c_int32
+    lib.infiniopGetRotmWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopRotm.restype = c_int32
+    lib.infiniopRotm.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyRotmDescriptor.restype = c_int32
+    lib.infiniopDestroyRotmDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def rotmg_(lib):
+    lib.infiniopCreateRotmgDescriptor.restype = c_int32
+    lib.infiniopCreateRotmgDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetRotmgWorkspaceSize.restype = c_int32
+    lib.infiniopGetRotmgWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopRotmg.restype = c_int32
+    lib.infiniopRotmg.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyRotmgDescriptor.restype = c_int32
+    lib.infiniopDestroyRotmgDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def scal_(lib):
+    lib.infiniopCreateScalDescriptor.restype = c_int32
+    lib.infiniopCreateScalDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetScalWorkspaceSize.restype = c_int32
+    lib.infiniopGetScalWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopScal.restype = c_int32
+    lib.infiniopScal.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroyScalDescriptor.restype = c_int32
+    lib.infiniopDestroyScalDescriptor.argtypes = [
+        infiniopOperatorDescriptor_t,
+    ]
+
+
+@OpRegister.operator
+def swap_(lib):
+    lib.infiniopCreateSwapDescriptor.restype = c_int32
+    lib.infiniopCreateSwapDescriptor.argtypes = [
+        infiniopHandle_t,
+        POINTER(infiniopOperatorDescriptor_t),
+        infiniopTensorDescriptor_t,
+        infiniopTensorDescriptor_t,
+    ]
+
+    lib.infiniopGetSwapWorkspaceSize.restype = c_int32
+    lib.infiniopGetSwapWorkspaceSize.argtypes = [
+        infiniopOperatorDescriptor_t,
+        POINTER(c_size_t),
+    ]
+
+    lib.infiniopSwap.restype = c_int32
+    lib.infiniopSwap.argtypes = [
+        infiniopOperatorDescriptor_t,
+        c_void_p,
+        c_size_t,
+        c_void_p,
+        c_void_p,
+        c_void_p,
+    ]
+
+    lib.infiniopDestroySwapDescriptor.restype = c_int32
+    lib.infiniopDestroySwapDescriptor.argtypes = [
         infiniopOperatorDescriptor_t,
     ]
