@@ -7,7 +7,7 @@ local FLASH_ATTN_ROOT = get_config("flash-attn")
 
 local INFINI_ROOT = os.getenv("INFINI_ROOT") or (os.getenv(is_host("windows") and "HOMEPATH" or "HOME") .. "/.infini")
 
-function _qy_flash_attn_cuda_so_path()
+local function _qy_flash_attn_cuda_so_path()
     -- Highest priority: override the exact `.so` file to link.
     local env_path = os.getenv("FLASH_ATTN_2_CUDA_SO")
     if env_path and env_path ~= "" then

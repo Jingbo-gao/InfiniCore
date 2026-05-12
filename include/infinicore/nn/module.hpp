@@ -27,6 +27,10 @@ public:
 
     std::unordered_map<std::string, Module *> modules_dict() const;
 
+    const std::unordered_map<std::string, std::shared_ptr<Module>> &children() const {
+        return submodules_;
+    }
+
 protected:
     Tensor register_parameter(const std::string &name, Parameter param);
 
