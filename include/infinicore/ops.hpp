@@ -3,6 +3,7 @@
 #include "ops/adaptive_max_pool1d.hpp"
 #include "ops/add.hpp"
 #include "ops/add_rms_norm.hpp"
+#include "ops/argmax.hpp"
 #include "ops/addcmul.hpp"
 #include "ops/asin.hpp"
 #include "ops/asinh.hpp"
