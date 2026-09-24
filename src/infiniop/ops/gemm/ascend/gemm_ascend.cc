@@ -4,6 +4,25 @@
 #include <aclnnop/level2/aclnn_gemm.h>
 
 #include <algorithm>
+#include <cstring>
+#include <unordered_map>
+
+// Custom hash function for alpha beta pair<float, float>
+struct FloatPairHash {
+    size_t operator()(const std::pair<float, float> &p) const {
+        uint64_t combined;
+        std::memcpy(reinterpret_cast<char *>(&combined), &p.first, sizeof(float));
+        std::memcpy(reinterpret_cast<char *>(&combined) + sizeof(float), &p.second, sizeof(float));
+
+        return std::hash<uint64_t>()(combined);
+    }
+};
+
+struct FloatPairEqual {
+    bool operator()(const std::pair<float, float> &a, const std::pair<float, float> &b) const {
+        return a.first == b.first && a.second == b.second;
+    }
+};
 
 namespace op::gemm::ascend {
 
@@ -106,26 +125,14 @@ infiniStatus_t Descriptor::createWithFormat(
     size_t workspace_size = 0;
     int8_t mt = 1;
     if (b_is_fractal_nz) {
-        // Workspace size only; calculate() builds a fresh one-shot executor
-        // per launch (executor caching measured no benefit, workflow §13).
         CHECK_ACL(aclnnMatmulWeightNzGetWorkspaceSize(
             ta, tb, tc, mt, &workspace_size, &executor));
-        aclDestroyAclOpExecutor(executor);
     } else {
-        size_t default_workspace_size = 0;
+        CHECK_ACL(aclnnGemmGetWorkspaceSize(ta, tb, tc, 1., 0., 0, trans_b ? 1 : 0, tc, mt, &workspace_size, &executor));
         size_t beta_one_workspace_size = 0;
-        aclOpExecutor *default_executor = nullptr;
         aclOpExecutor *beta_one_executor = nullptr;
-        CHECK_ACL(aclnnGemmGetWorkspaceSize(
-            ta, tb, tc, 1., 0., 0, trans_b ? 1 : 0, tc, mt,
-            &default_workspace_size, &default_executor));
-        CHECK_ACL(aclnnGemmGetWorkspaceSize(
-            ta, tb, tc, 1., 1., 0, trans_b ? 1 : 0, tc, mt,
-            &beta_one_workspace_size, &beta_one_executor));
-        workspace_size = std::max(default_workspace_size,
-                                  beta_one_workspace_size);
-        aclDestroyAclOpExecutor(default_executor);
-        aclDestroyAclOpExecutor(beta_one_executor);
+        CHECK_ACL(aclnnGemmGetWorkspaceSize(ta, tb, tc, 1., 1., 0, trans_b ? 1 : 0, tc, mt, &beta_one_workspace_size, &beta_one_executor));
+        workspace_size = std::max(workspace_size, beta_one_workspace_size);
     }
 
     *desc_ptr = new Descriptor(
@@ -177,7 +184,6 @@ infiniStatus_t Descriptor::calculate(
             call_a.tensor, call_b.tensor, call_c.tensor, _opaque->mt,
             &workspace_size, &executor));
         if (workspaceSize_ < workspace_size) {
-            aclDestroyAclOpExecutor(executor);
             return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
         }
 
@@ -187,9 +193,6 @@ infiniStatus_t Descriptor::calculate(
         return INFINI_STATUS_SUCCESS;
     }
 
-    if (workspaceSize_ < _workspace_size) {
-        return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
-    }
     auto unit = infiniSizeOf(_dtype);
     for (size_t i = 0; i < _info.batch; ++i) {
         auto a_ptr = ((char *)const_cast<void *>(a))
@@ -197,7 +200,6 @@ infiniStatus_t Descriptor::calculate(
         auto b_ptr = ((char *)const_cast<void *>(b))
                    + i * _info.b_matrix.stride * unit;
         auto c_ptr = ((char *)c) + i * _info.c_matrix.stride * unit;
-
         aclnnTensorDescriptor call_a(
             _opaque->a->dataType, _opaque->a->shape, _opaque->a->strides,
             _opaque->a->format, _opaque->a->storageShape, a_ptr);
@@ -214,7 +216,6 @@ infiniStatus_t Descriptor::calculate(
             alpha, beta, 0, _opaque->transB, call_c.tensor, _opaque->mt,
             &workspace_size, &executor));
         if (workspaceSize_ < workspace_size) {
-            aclDestroyAclOpExecutor(executor);
             return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
         }
         CHECK_ACL(aclnnGemm(workspace, workspace_size, executor, stream));

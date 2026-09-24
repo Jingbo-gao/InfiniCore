@@ -57,6 +57,7 @@ void add_bias_inplace_ascend(Tensor out_matrix, Tensor bias_matrix) {
             reinterpret_cast<aclrtStream>(context::getStream())),
         "aclnnInplaceAdd");
 }
+
 class AscendBiasAddInplaceOp : public graph::GraphOperator {
 public:
     AscendBiasAddInplaceOp(Tensor out_matrix, Tensor bias_matrix)
