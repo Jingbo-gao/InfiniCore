@@ -14,6 +14,17 @@ __INFINI_C __export infiniStatus_t infiniopCreateMatmulAllReduceDescriptor(
     infiniopTensorDescriptor_t bias_desc,
     const char *group_name);
 
+// Ascend-only descriptor for a weight with logical [K, N] shape and physical
+// ACL_FORMAT_FRACTAL_NZ storage.
+__INFINI_C __export infiniStatus_t infiniopCreateMatmulAllReduceNzDescriptor(
+    infiniopHandle_t handle,
+    infiniopMatmulAllReduceDescriptor_t *desc_ptr,
+    infiniopTensorDescriptor_t output_desc,
+    infiniopTensorDescriptor_t input_desc,
+    infiniopTensorDescriptor_t weight_desc,
+    infiniopTensorDescriptor_t bias_desc,
+    const char *group_name);
+
 __INFINI_C __export infiniStatus_t infiniopGetMatmulAllReduceWorkspaceSize(
     infiniopMatmulAllReduceDescriptor_t desc,
     size_t *size);

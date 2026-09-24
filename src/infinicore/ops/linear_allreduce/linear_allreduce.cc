@@ -4,9 +4,12 @@
 
 #include "../../utils.hpp"
 
+#include <stdexcept>
+
 namespace infinicore::op {
 
 INFINICORE_GRAPH_OP_DISPATCHERS_IMPL(LinearAllReduce);
+INFINICORE_GRAPH_OP_DISPATCHERS_IMPL(LinearAllReduceNz);
 
 LinearAllReduce::LinearAllReduce(
     Tensor output,
@@ -32,12 +35,43 @@ void LinearAllReduce::execute(
         LinearAllReduce, output, input, weight, bias, communicator);
 }
 
+LinearAllReduceNz::LinearAllReduceNz(
+    Tensor output,
+    const Tensor &input,
+    const Tensor &weight,
+    const std::optional<Tensor> &bias,
+    infinicclComm_t communicator) {
+    INFINICORE_ASSERT_TENSORS_SAME_DEVICE(output, input, weight);
+    if (bias) {
+        INFINICORE_ASSERT_TENSORS_SAME_DEVICE(output, *bias);
+    }
+    INFINICORE_GRAPH_OP_DISPATCH(
+        output->device().getType(), output, input, weight, bias, communicator);
+}
+
+void LinearAllReduceNz::execute(
+    Tensor output,
+    const Tensor &input,
+    const Tensor &weight,
+    const std::optional<Tensor> &bias,
+    infinicclComm_t communicator) {
+    INFINICORE_GRAPH_OP_RECORD_OR_RUN(
+        LinearAllReduceNz, output, input, weight, bias, communicator);
+}
+
+enum class PackedLayout {
+    NONE,
+    ND,
+    ASCEND_NZ,
+};
+
 static Tensor linear_allreduce_impl(
     Tensor input,
     Tensor weight,
     std::optional<Tensor> bias,
     infinicclComm_t communicator,
-    bool weight_is_packed) {
+    PackedLayout packed_layout) {
+    const bool weight_is_packed = packed_layout != PackedLayout::NONE;
     Size in_features = weight->shape()[weight_is_packed ? 0 : 1];
     Size out_features = weight->shape()[weight_is_packed ? 1 : 0];
     auto output_shape = input->shape();
@@ -55,9 +89,19 @@ static Tensor linear_allreduce_impl(
         auto weight_matrix = weight_is_packed
                                ? weight
                                : weight->permute({1, 0});
-        LinearAllReduce::execute(
-            output_matrix, input_matrix, weight_matrix, bias, communicator);
+        if (packed_layout == PackedLayout::ASCEND_NZ) {
+            LinearAllReduceNz::execute(
+                output_matrix, input_matrix, weight_matrix, bias, communicator);
+        } else {
+            LinearAllReduce::execute(
+                output_matrix, input_matrix, weight_matrix, bias, communicator);
+        }
         return output;
+    }
+
+    if (packed_layout == PackedLayout::ASCEND_NZ) {
+        throw std::runtime_error(
+            "FRACTAL_NZ fused linear/all-reduce is only supported on Ascend");
     }
 
     auto output = weight_is_packed
@@ -74,7 +118,7 @@ Tensor linear_allreduce(
     std::optional<Tensor> bias,
     infinicclComm_t communicator) {
     return linear_allreduce_impl(
-        input, weight, bias, communicator, false);
+        input, weight, bias, communicator, PackedLayout::NONE);
 }
 
 Tensor linear_allreduce_packed(
@@ -83,7 +127,16 @@ Tensor linear_allreduce_packed(
     std::optional<Tensor> bias,
     infinicclComm_t communicator) {
     return linear_allreduce_impl(
-        input, packed_weight, bias, communicator, true);
+        input, packed_weight, bias, communicator, PackedLayout::ND);
+}
+
+Tensor linear_allreduce_packed_nz(
+    Tensor input,
+    Tensor nz_weight,
+    std::optional<Tensor> bias,
+    infinicclComm_t communicator) {
+    return linear_allreduce_impl(
+        input, nz_weight, bias, communicator, PackedLayout::ASCEND_NZ);
 }
 
 } // namespace infinicore::op
