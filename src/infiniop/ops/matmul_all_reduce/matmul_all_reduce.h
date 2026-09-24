@@ -34,6 +34,16 @@
             infiniopTensorDescriptor_t bias_desc,                \
             const char *group_name);                             \
                                                                  \
+        static infiniStatus_t createWithFormat(                  \
+            infiniopHandle_t handle,                             \
+            Descriptor **desc_ptr,                               \
+            infiniopTensorDescriptor_t output_desc,              \
+            infiniopTensorDescriptor_t input_desc,               \
+            infiniopTensorDescriptor_t weight_desc,              \
+            infiniopTensorDescriptor_t bias_desc,                \
+            const char *group_name,                              \
+            bool weight_is_fractal_nz);                          \
+                                                                 \
         infiniStatus_t calculate(                                \
             void *workspace,                                     \
             size_t workspace_size,                               \

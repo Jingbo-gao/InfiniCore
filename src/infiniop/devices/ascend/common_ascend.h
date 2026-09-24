@@ -35,6 +35,12 @@ struct aclnnTensorDescriptor {
     aclTensor *tensor;
 
     aclnnTensorDescriptor(aclDataType dtype, const std::vector<int64_t> &shape, const std::vector<int64_t> &strides, void *data = nullptr);
+    aclnnTensorDescriptor(aclDataType dtype,
+                          const std::vector<int64_t> &shape,
+                          const std::vector<int64_t> &strides,
+                          aclFormat format,
+                          const std::vector<int64_t> &storage_shape,
+                          void *data = nullptr);
     aclnnTensorDescriptor(infiniopTensorDescriptor_t y_desc, void *data = nullptr);
     ~aclnnTensorDescriptor();
     size_t numel() const;

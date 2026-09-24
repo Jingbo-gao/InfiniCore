@@ -28,6 +28,35 @@ __INFINI_C infiniStatus_t infiniopCreateMatmulAllReduceDescriptor(
     }
 }
 
+__INFINI_C infiniStatus_t infiniopCreateMatmulAllReduceNzDescriptor(
+    infiniopHandle_t handle,
+    infiniopMatmulAllReduceDescriptor_t *desc_ptr,
+    infiniopTensorDescriptor_t output_desc,
+    infiniopTensorDescriptor_t input_desc,
+    infiniopTensorDescriptor_t weight_desc,
+    infiniopTensorDescriptor_t bias_desc,
+    const char *group_name) {
+#ifdef ENABLE_ASCEND_API
+    if (handle->device == INFINI_DEVICE_ASCEND) {
+        return op::matmul_all_reduce::ascend::Descriptor::createWithFormat(
+            handle,
+            reinterpret_cast<op::matmul_all_reduce::ascend::Descriptor **>(
+                desc_ptr),
+            output_desc, input_desc, weight_desc, bias_desc, group_name,
+            true);
+    }
+#else
+    (void)handle;
+    (void)desc_ptr;
+    (void)output_desc;
+    (void)input_desc;
+    (void)weight_desc;
+    (void)bias_desc;
+    (void)group_name;
+#endif
+    return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
+}
+
 __INFINI_C infiniStatus_t infiniopGetMatmulAllReduceWorkspaceSize(
     infiniopMatmulAllReduceDescriptor_t desc,
     size_t *size) {

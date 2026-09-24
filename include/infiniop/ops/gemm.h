@@ -11,6 +11,14 @@ __INFINI_C __export infiniStatus_t infiniopCreateGemmDescriptor(infiniopHandle_t
                                                                 infiniopTensorDescriptor_t a_desc,
                                                                 infiniopTensorDescriptor_t b_desc);
 
+// Ascend-only descriptor for a logically [K, N] B matrix whose storage is
+// already packed as ACL_FORMAT_FRACTAL_NZ. The original API remains ND.
+__INFINI_C __export infiniStatus_t infiniopCreateGemmNzDescriptor(infiniopHandle_t handle,
+                                                                  infiniopGemmDescriptor_t *desc_ptr,
+                                                                  infiniopTensorDescriptor_t c_desc,
+                                                                  infiniopTensorDescriptor_t a_desc,
+                                                                  infiniopTensorDescriptor_t b_desc);
+
 __INFINI_C __export infiniStatus_t infiniopGetGemmWorkspaceSize(infiniopGemmDescriptor_t desc, size_t *size);
 
 __INFINI_C __export infiniStatus_t infiniopGemm(infiniopGemmDescriptor_t desc,
