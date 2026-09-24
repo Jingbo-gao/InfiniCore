@@ -11,6 +11,7 @@ namespace {
 using HostIntArrayMap = std::unordered_map<const void *, std::vector<int64_t>>;
 
 thread_local const HostIntArrayMap *active_host_int_arrays = nullptr;
+thread_local HostIntArrayMap eager_host_int_arrays;
 
 class HostIntArrayScope {
 public:
@@ -140,15 +141,37 @@ void Graph::bind_host_int_array(const Tensor &device_tensor,
 }
 
 const std::vector<int64_t> *lookup_bound_host_int_array(const Tensor &tensor) {
-    if (active_host_int_arrays == nullptr || !tensor) {
+    if (!tensor) {
         return nullptr;
     }
 
-    const auto it = active_host_int_arrays->find(tensor->data());
-    if (it == active_host_int_arrays->end()) {
-        return nullptr;
+    if (active_host_int_arrays != nullptr) {
+        const auto it = active_host_int_arrays->find(tensor->data());
+        if (it != active_host_int_arrays->end()) {
+            return &it->second;
+        }
     }
-    return &it->second;
+
+    const auto eager_it = eager_host_int_arrays.find(tensor->data());
+    return eager_it == eager_host_int_arrays.end() ? nullptr : &eager_it->second;
+}
+
+void clear_eager_host_int_arrays() {
+    eager_host_int_arrays.clear();
+}
+
+void bind_eager_host_int_array(const Tensor &device_tensor,
+                               const int32_t *values,
+                               size_t size) {
+    INFINICORE_ASSERT(device_tensor);
+    INFINICORE_ASSERT(values != nullptr || size == 0);
+
+    auto &bound = eager_host_int_arrays[device_tensor->data()];
+    bound.clear();
+    bound.reserve(size);
+    for (size_t i = 0; i < size; ++i) {
+        bound.push_back(values[i]);
+    }
 }
 
 void Graph::add_operator(std::shared_ptr<GraphOperator> op) {
