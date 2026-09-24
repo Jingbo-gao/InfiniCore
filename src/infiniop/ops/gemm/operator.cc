@@ -86,6 +86,23 @@ __INFINI_C infiniStatus_t infiniopCreateGemmDescriptor(
 #undef CREATE
 }
 
+__INFINI_C infiniStatus_t infiniopCreateGemmNzDescriptor(
+    infiniopHandle_t handle,
+    infiniopGemmDescriptor_t *desc_ptr,
+    infiniopTensorDescriptor_t c_desc,
+    infiniopTensorDescriptor_t a_desc,
+    infiniopTensorDescriptor_t b_desc) {
+#ifdef ENABLE_ASCEND_API
+    if (handle->device == INFINI_DEVICE_ASCEND) {
+        return op::gemm::ascend::Descriptor::createWithFormat(
+            handle,
+            reinterpret_cast<op::gemm::ascend::Descriptor **>(desc_ptr),
+            c_desc, a_desc, b_desc, true);
+    }
+#endif
+    return INFINI_STATUS_DEVICE_TYPE_NOT_SUPPORTED;
+}
+
 __INFINI_C infiniStatus_t
 infiniopGetGemmWorkspaceSize(
     infiniopGemmDescriptor_t desc,

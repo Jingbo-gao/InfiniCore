@@ -64,6 +64,31 @@ aclnnTensorDescriptor::aclnnTensorDescriptor(aclDataType dtype, const std::vecto
                                    data);
 }
 
+aclnnTensorDescriptor::aclnnTensorDescriptor(
+    aclDataType dtype,
+    const std::vector<int64_t> &shape,
+    const std::vector<int64_t> &strides,
+    aclFormat format,
+    const std::vector<int64_t> &storage_shape,
+    void *data) {
+    this->ndim = shape.size();
+    this->shape = shape;
+    this->strides = strides;
+    this->dataType = dtype;
+    this->format = format;
+    this->storageShape = storage_shape;
+    this->storageNdim = static_cast<int64_t>(storage_shape.size());
+    this->tensor = aclCreateTensor(this->shape.data(),
+                                   this->ndim,
+                                   this->dataType,
+                                   this->strides.data(),
+                                   this->offset,
+                                   this->format,
+                                   this->storageShape.data(),
+                                   this->storageNdim,
+                                   data);
+}
+
 aclnnTensorDescriptor::~aclnnTensorDescriptor() {
     if (this->tensor) {
         aclDestroyTensor(this->tensor);

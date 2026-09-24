@@ -79,6 +79,14 @@
             infiniopTensorDescriptor_t a_desc,                   \
             infiniopTensorDescriptor_t b_desc);                  \
                                                                  \
+        static infiniStatus_t createWithFormat(                  \
+            infiniopHandle_t handle,                             \
+            Descriptor **desc_ptr,                               \
+            infiniopTensorDescriptor_t c_desc,                   \
+            infiniopTensorDescriptor_t a_desc,                   \
+            infiniopTensorDescriptor_t b_desc,                   \
+            bool b_is_fractal_nz);                               \
+                                                                 \
         infiniStatus_t calculate(                                \
             void *workspace, size_t workspace_size,              \
             void *c,                                             \

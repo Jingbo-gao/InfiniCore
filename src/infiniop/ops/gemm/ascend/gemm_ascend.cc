@@ -3,25 +3,7 @@
 #include <aclnnop/aclnn_matmul.h>
 #include <aclnnop/level2/aclnn_gemm.h>
 
-#include <cstring>
-#include <unordered_map>
-
-// Custom hash function for alpha beta pair<float, float>
-struct FloatPairHash {
-    size_t operator()(const std::pair<float, float> &p) const {
-        uint64_t combined;
-        std::memcpy(reinterpret_cast<char *>(&combined), &p.first, sizeof(float));
-        std::memcpy(reinterpret_cast<char *>(&combined) + sizeof(float), &p.second, sizeof(float));
-
-        return std::hash<uint64_t>()(combined);
-    }
-};
-
-struct FloatPairEqual {
-    bool operator()(const std::pair<float, float> &a, const std::pair<float, float> &b) const {
-        return a.first == b.first && a.second == b.second;
-    }
-};
+#include <algorithm>
 
 namespace op::gemm::ascend {
 
@@ -34,17 +16,13 @@ struct Descriptor::Opaque {
     // whether B is handed to aclnnGemm as a contiguous [out, in] tensor with
     // transB=1 (see Descriptor::create); 0 = original behaviour (transB = 0).
     int8_t transB;
-    // alpha&beta hashmap
-    std::unordered_map<std::pair<float, float>, aclOpExecutor *, FloatPairHash, FloatPairEqual> lookup;
-
+    // aclnnGemm accepts ND only. NZ weights use aclnnMatmulWeightNz and its
+    // one-shot executor, which is consumed by the matching call API.
+    int8_t weightNz;
     ~Opaque() {
         delete c;
         delete a;
         delete b;
-        for (auto &item : lookup) {
-            aclDestroyAclOpExecutor(item.second);
-        }
-        lookup.clear();
     }
 };
 
@@ -58,6 +36,17 @@ infiniStatus_t Descriptor::create(
     infiniopTensorDescriptor_t c_desc,
     infiniopTensorDescriptor_t a_desc,
     infiniopTensorDescriptor_t b_desc) {
+    return createWithFormat(
+        handle_, desc_ptr, c_desc, a_desc, b_desc, false);
+}
+
+infiniStatus_t Descriptor::createWithFormat(
+    infiniopHandle_t handle_,
+    Descriptor **desc_ptr,
+    infiniopTensorDescriptor_t c_desc,
+    infiniopTensorDescriptor_t a_desc,
+    infiniopTensorDescriptor_t b_desc,
+    bool b_is_fractal_nz) {
     auto handle = reinterpret_cast<device::ascend::Handle *>(handle_);
     auto dtype = c_desc->dtype();
 
@@ -83,7 +72,22 @@ infiniStatus_t Descriptor::create(
     // the original behaviour (transB = 0).
     bool trans_b = false;
     aclnnTensorDescriptor *b;
-    if (info.b_matrix.row_stride == 1 && info.b_matrix.col_stride > 1) {
+    if (b_is_fractal_nz) {
+        CHECK_API_OR(info.batch == 1, true,
+                     return INFINI_STATUS_BAD_TENSOR_SHAPE);
+        CHECK_API_OR(
+            info.b_matrix.row_stride == static_cast<ptrdiff_t>(info.b_matrix.cols) &&
+                info.b_matrix.col_stride == 1,
+            true, return INFINI_STATUS_BAD_TENSOR_STRIDES);
+        const auto k = static_cast<int64_t>(info.b_matrix.rows);
+        const auto n = static_cast<int64_t>(info.b_matrix.cols);
+        CHECK_API_OR(k % 16 == 0 && n % 16 == 0, true,
+                     return INFINI_STATUS_BAD_TENSOR_SHAPE);
+        b = new aclnnTensorDescriptor(
+            toAclDataType(b_desc->dtype()),
+            {k, n}, {n, 1}, ACL_FORMAT_FRACTAL_NZ,
+            {n / 16, k / 16, 16, 16});
+    } else if (info.b_matrix.row_stride == 1 && info.b_matrix.col_stride > 1) {
         b = new aclnnTensorDescriptor(toAclDataType(b_desc->dtype()),
                                       {static_cast<int64_t>(info.b_matrix.cols), static_cast<int64_t>(info.b_matrix.rows)},
                                       {info.b_matrix.col_stride, info.b_matrix.row_stride});
@@ -98,16 +102,31 @@ infiniStatus_t Descriptor::create(
          ta = a->tensor,
          tb = b->tensor;
 
-    std::unordered_map<std::pair<float, float>, aclOpExecutor *, FloatPairHash, FloatPairEqual> lookup;
     aclOpExecutor *executor = nullptr;
     size_t workspace_size = 0;
     int8_t mt = 1;
-    CHECK_ACL(aclnnGemmGetWorkspaceSize(ta, tb, tc, 1., 0., 0, trans_b ? 1 : 0, tc, mt, &workspace_size, &executor));
-    CHECK_ACL(aclSetAclOpExecutorRepeatable(executor));
-    lookup[std::make_pair(1.0f, 0.0f)] = executor;
-    CHECK_ACL(aclnnGemmGetWorkspaceSize(ta, tb, tc, 1., 1., 0, trans_b ? 1 : 0, tc, mt, &workspace_size, &executor));
-    CHECK_ACL(aclSetAclOpExecutorRepeatable(executor));
-    lookup[std::make_pair(1.0f, 1.0f)] = executor;
+    if (b_is_fractal_nz) {
+        // Workspace size only; calculate() builds a fresh one-shot executor
+        // per launch (executor caching measured no benefit, workflow §13).
+        CHECK_ACL(aclnnMatmulWeightNzGetWorkspaceSize(
+            ta, tb, tc, mt, &workspace_size, &executor));
+        aclDestroyAclOpExecutor(executor);
+    } else {
+        size_t default_workspace_size = 0;
+        size_t beta_one_workspace_size = 0;
+        aclOpExecutor *default_executor = nullptr;
+        aclOpExecutor *beta_one_executor = nullptr;
+        CHECK_ACL(aclnnGemmGetWorkspaceSize(
+            ta, tb, tc, 1., 0., 0, trans_b ? 1 : 0, tc, mt,
+            &default_workspace_size, &default_executor));
+        CHECK_ACL(aclnnGemmGetWorkspaceSize(
+            ta, tb, tc, 1., 1., 0, trans_b ? 1 : 0, tc, mt,
+            &beta_one_workspace_size, &beta_one_executor));
+        workspace_size = std::max(default_workspace_size,
+                                  beta_one_workspace_size);
+        aclDestroyAclOpExecutor(default_executor);
+        aclDestroyAclOpExecutor(beta_one_executor);
+    }
 
     *desc_ptr = new Descriptor(
         dtype, info, workspace_size,
@@ -117,7 +136,7 @@ infiniStatus_t Descriptor::create(
             b,
             mt,
             static_cast<int8_t>(trans_b ? 1 : 0),
-            std::move(lookup)},
+            static_cast<int8_t>(b_is_fractal_nz ? 1 : 0)},
         handle->device, handle->device_id);
 
     return INFINI_STATUS_SUCCESS;
@@ -133,33 +152,71 @@ infiniStatus_t Descriptor::calculate(
     float alpha,
     void *stream) const {
 
-    auto tc = _opaque->c->tensor,
-         ta = _opaque->a->tensor,
-         tb = _opaque->b->tensor;
-
     size_t workspace_size = _workspace_size;
-    aclOpExecutor *executor;
-    auto key = std::make_pair(alpha, beta);
-    if (_opaque->lookup.find(key) != _opaque->lookup.end()) {
-        executor = _opaque->lookup[key];
-    } else {
-        CHECK_ACL(aclnnGemmGetWorkspaceSize(
-            ta, tb, tc, alpha, beta, 0, _opaque->transB, tc, _opaque->mt,
+    if (_opaque->weightNz) {
+        // The dedicated WeightNz API has matmul semantics only. Callers must
+        // keep bias/scaling on the ND path unless these values are identity.
+        if (alpha != 1.0f || beta != 0.0f || _info.batch != 1) {
+            return INFINI_STATUS_NOT_IMPLEMENTED;
+        }
+
+        aclnnTensorDescriptor call_a(
+            _opaque->a->dataType, _opaque->a->shape, _opaque->a->strides,
+            _opaque->a->format, _opaque->a->storageShape,
+            const_cast<void *>(a));
+        aclnnTensorDescriptor call_b(
+            _opaque->b->dataType, _opaque->b->shape, _opaque->b->strides,
+            _opaque->b->format, _opaque->b->storageShape,
+            const_cast<void *>(b));
+        aclnnTensorDescriptor call_c(
+            _opaque->c->dataType, _opaque->c->shape, _opaque->c->strides,
+            _opaque->c->format, _opaque->c->storageShape, c);
+
+        aclOpExecutor *executor = nullptr;
+        CHECK_ACL(aclnnMatmulWeightNzGetWorkspaceSize(
+            call_a.tensor, call_b.tensor, call_c.tensor, _opaque->mt,
             &workspace_size, &executor));
-        CHECK_ACL(aclSetAclOpExecutorRepeatable(executor));
-        _opaque->lookup[key] = executor;
+        if (workspaceSize_ < workspace_size) {
+            aclDestroyAclOpExecutor(executor);
+            return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
+        }
+
+        CHECK_ACL(aclnnMatmulWeightNz(
+            workspace, workspace_size, executor,
+            reinterpret_cast<aclrtStream>(stream)));
+        return INFINI_STATUS_SUCCESS;
     }
 
-    if (workspaceSize_ < workspace_size) {
+    if (workspaceSize_ < _workspace_size) {
         return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
     }
-
     auto unit = infiniSizeOf(_dtype);
     for (size_t i = 0; i < _info.batch; ++i) {
-        AclSetTensorAddr(executor, 0, ta, ((char *)a) + i * _info.a_matrix.stride * unit);
-        AclSetTensorAddr(executor, 1, tb, ((char *)b) + i * _info.b_matrix.stride * unit);
-        AclSetTensorAddr(executor, 2, tc, ((char *)c) + i * _info.c_matrix.stride * unit);
-        AclSetTensorAddr(executor, 3, tc, ((char *)c) + i * _info.c_matrix.stride * unit);
+        auto a_ptr = ((char *)const_cast<void *>(a))
+                   + i * _info.a_matrix.stride * unit;
+        auto b_ptr = ((char *)const_cast<void *>(b))
+                   + i * _info.b_matrix.stride * unit;
+        auto c_ptr = ((char *)c) + i * _info.c_matrix.stride * unit;
+
+        aclnnTensorDescriptor call_a(
+            _opaque->a->dataType, _opaque->a->shape, _opaque->a->strides,
+            _opaque->a->format, _opaque->a->storageShape, a_ptr);
+        aclnnTensorDescriptor call_b(
+            _opaque->b->dataType, _opaque->b->shape, _opaque->b->strides,
+            _opaque->b->format, _opaque->b->storageShape, b_ptr);
+        aclnnTensorDescriptor call_c(
+            _opaque->c->dataType, _opaque->c->shape, _opaque->c->strides,
+            _opaque->c->format, _opaque->c->storageShape, c_ptr);
+
+        aclOpExecutor *executor = nullptr;
+        CHECK_ACL(aclnnGemmGetWorkspaceSize(
+            call_a.tensor, call_b.tensor, call_c.tensor,
+            alpha, beta, 0, _opaque->transB, call_c.tensor, _opaque->mt,
+            &workspace_size, &executor));
+        if (workspaceSize_ < workspace_size) {
+            aclDestroyAclOpExecutor(executor);
+            return INFINI_STATUS_INSUFFICIENT_WORKSPACE;
+        }
         CHECK_ACL(aclnnGemm(workspace, workspace_size, executor, stream));
     }
 
