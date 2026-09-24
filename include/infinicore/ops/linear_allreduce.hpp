@@ -27,4 +27,10 @@ Tensor linear_allreduce_packed(
     std::optional<Tensor> bias,
     infinicclComm_t communicator);
 
+Tensor linear_allreduce_packed_nz(
+    Tensor input,
+    Tensor nz_weight,
+    std::optional<Tensor> bias,
+    infinicclComm_t communicator);
+
 } // namespace infinicore::op

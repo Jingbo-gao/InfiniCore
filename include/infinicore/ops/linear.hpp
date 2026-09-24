@@ -16,4 +16,11 @@ Tensor linear_packed(Tensor input, Tensor packed_weight,
 void linear_packed_(Tensor out, Tensor input, Tensor packed_weight,
                     std::optional<Tensor> bias, float alpha = 1.0f);
 
+// Ascend-only variant. nz_weight has logical shape [IC, OC] and physical
+// ACL_FORMAT_FRACTAL_NZ storage produced by ascend_format_cast_nz().
+Tensor linear_packed_nz(Tensor input, Tensor nz_weight,
+                        std::optional<Tensor> bias, float alpha = 1.0f);
+void linear_packed_nz_(Tensor out, Tensor input, Tensor nz_weight,
+                       std::optional<Tensor> bias, float alpha = 1.0f);
+
 } // namespace infinicore::op
