@@ -15,14 +15,6 @@ INFINICORE_GRAPH_OP_CLASS(
     const std::optional<Tensor> &,
     infinicclComm_t);
 
-INFINICORE_GRAPH_OP_CLASS(
-    LinearAllReduceNz,
-    Tensor,
-    const Tensor &,
-    const Tensor &,
-    const std::optional<Tensor> &,
-    infinicclComm_t);
-
 Tensor linear_allreduce(
     Tensor input,
     Tensor weight,

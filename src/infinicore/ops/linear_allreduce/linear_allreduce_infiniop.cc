@@ -8,12 +8,6 @@ namespace infinicore::op::linear_allreduce_impl::infiniop {
 
 INFINIOP_CACHABLE_DESCRIPTOR(Descriptor, MatmulAllReduce, 100);
 
-thread_local common::OpCache<size_t, std::shared_ptr<Descriptor>> nz_caches(
-    100,
-    [](std::shared_ptr<Descriptor> &desc) {
-        desc = nullptr;
-    });
-
 struct PlannedMeta {
     std::shared_ptr<Descriptor> descriptor;
     graph::GraphTensor workspace;
@@ -58,51 +52,6 @@ void *plan(
         std::move(graph_bias)};
 }
 
-void *plan_nz(
-    Tensor output,
-    const Tensor &input,
-    const Tensor &weight,
-    const std::optional<Tensor> &bias,
-    infinicclComm_t communicator) {
-    std::array<char, INFINICCL_COMM_NAME_MAX_LENGTH> group_name{};
-    INFINICORE_CHECK_ERROR(infinicclGetCommName(
-        communicator, group_name.data(), group_name.size()));
-
-    size_t seed = hash_combine(
-        output, input, weight, bias, std::string(group_name.data()));
-    auto bias_desc = bias ? (*bias)->desc() : nullptr;
-    std::shared_ptr<Descriptor> descriptor;
-    {
-        auto device = context::getDevice();
-        auto &cache = nz_caches.getCache(device);
-        descriptor = cache.get(seed).value_or(nullptr);
-        if (!descriptor) {
-            descriptor = std::make_shared<Descriptor>(nullptr);
-            INFINICORE_CHECK_ERROR(
-                infiniopCreateMatmulAllReduceNzDescriptor(
-                    context::getInfiniopHandle(device),
-                    &descriptor->desc,
-                    output->desc(), input->desc(), weight->desc(),
-                    bias_desc, group_name.data()));
-            cache.put(seed, descriptor);
-        }
-    }
-
-    INFINIOP_WORKSPACE_TENSOR(
-        workspace, MatmulAllReduce, descriptor);
-    std::optional<graph::GraphTensor> graph_bias;
-    if (bias) {
-        graph_bias.emplace(*bias);
-    }
-    return new PlannedMeta{
-        descriptor,
-        graph::GraphTensor(workspace),
-        graph::GraphTensor(output),
-        graph::GraphTensor(input),
-        graph::GraphTensor(weight),
-        std::move(graph_bias)};
-}
-
 void run(void *planned_meta) {
     auto planned = reinterpret_cast<PlannedMeta *>(planned_meta);
     const void *bias = planned->bias
@@ -130,12 +79,6 @@ static bool registered = []() {
     LinearAllReduce::run_dispatcher().registerDevice(
         Device::Type::ASCEND, &run);
     LinearAllReduce::cleanup_dispatcher().registerDevice(
-        Device::Type::ASCEND, &cleanup);
-    LinearAllReduceNz::plan_dispatcher().registerDevice(
-        Device::Type::ASCEND, &plan_nz);
-    LinearAllReduceNz::run_dispatcher().registerDevice(
-        Device::Type::ASCEND, &run);
-    LinearAllReduceNz::cleanup_dispatcher().registerDevice(
         Device::Type::ASCEND, &cleanup);
     return true;
 }();

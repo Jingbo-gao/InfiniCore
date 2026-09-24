@@ -81,6 +81,10 @@ private:
 };
 
 const std::vector<int64_t> *lookup_bound_host_int_array(const Tensor &tensor);
+void clear_eager_host_int_arrays();
+void bind_eager_host_int_array(const Tensor &device_tensor,
+                               const int32_t *values,
+                               size_t size);
 } // namespace infinicore::graph
 
 #define INFINICORE_GRAPH_OP_CLASS(__OP_NAME__, ...)                        \

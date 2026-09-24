@@ -1,5 +1,7 @@
 #include "infinicore/ops/linear_allreduce.hpp"
+#include "infinicore/ops/add.hpp"
 #include "infinicore/ops/distributed/allreduce.hpp"
+#include "infinicore/ops/gemm.hpp"
 #include "infinicore/ops/linear.hpp"
 
 #include "../../utils.hpp"
@@ -9,7 +11,6 @@
 namespace infinicore::op {
 
 INFINICORE_GRAPH_OP_DISPATCHERS_IMPL(LinearAllReduce);
-INFINICORE_GRAPH_OP_DISPATCHERS_IMPL(LinearAllReduceNz);
 
 LinearAllReduce::LinearAllReduce(
     Tensor output,
@@ -35,30 +36,6 @@ void LinearAllReduce::execute(
         LinearAllReduce, output, input, weight, bias, communicator);
 }
 
-LinearAllReduceNz::LinearAllReduceNz(
-    Tensor output,
-    const Tensor &input,
-    const Tensor &weight,
-    const std::optional<Tensor> &bias,
-    infinicclComm_t communicator) {
-    INFINICORE_ASSERT_TENSORS_SAME_DEVICE(output, input, weight);
-    if (bias) {
-        INFINICORE_ASSERT_TENSORS_SAME_DEVICE(output, *bias);
-    }
-    INFINICORE_GRAPH_OP_DISPATCH(
-        output->device().getType(), output, input, weight, bias, communicator);
-}
-
-void LinearAllReduceNz::execute(
-    Tensor output,
-    const Tensor &input,
-    const Tensor &weight,
-    const std::optional<Tensor> &bias,
-    infinicclComm_t communicator) {
-    INFINICORE_GRAPH_OP_RECORD_OR_RUN(
-        LinearAllReduceNz, output, input, weight, bias, communicator);
-}
-
 enum class PackedLayout {
     NONE,
     ND,
@@ -77,38 +54,39 @@ static Tensor linear_allreduce_impl(
     auto output_shape = input->shape();
     output_shape.back() = out_features;
 
-    const bool aclnn_supported = input->dtype() == DataType::F16 || input->dtype() == DataType::BF16;
-    if (input->device().getType() == Device::Type::ASCEND && aclnn_supported) {
-        auto output = Tensor::empty(output_shape, input->dtype(), input->device());
+    if (packed_layout == PackedLayout::ASCEND_NZ) {
+        // Plain (non-MC2) path for FRACTAL_NZ weights: dedicated
+        // aclnnMatmulWeightNz gemm followed by a plain HCCL all-reduce. This
+        // keeps the NZ weight layout (the layout that gave the ND->NZ win on
+        // the column-parallel layers) without paying the fused
+        // aclnnMatmulAllReduce AI_CPU coordination cost measured on device.
+        if (input->device().getType() != Device::Type::ASCEND) {
+            throw std::runtime_error(
+                "FRACTAL_NZ linear/all-reduce is only supported on Ascend");
+        }
+        auto output = Tensor::empty(output_shape, input->dtype(),
+                                    input->device());
         Size rows = 1;
         for (Size i = 0; i + 1 < input->ndim(); ++i) {
             rows *= input->size(i);
         }
-        auto input_matrix = input->view({rows, in_features});
-        auto output_matrix = output->view({rows, out_features});
-        auto weight_matrix = weight_is_packed
-                               ? weight
-                               : weight->permute({1, 0});
-        if (packed_layout == PackedLayout::ASCEND_NZ) {
-            LinearAllReduceNz::execute(
-                output_matrix, input_matrix, weight_matrix, bias, communicator);
-        } else {
-            LinearAllReduce::execute(
-                output_matrix, input_matrix, weight_matrix, bias, communicator);
+        op::gemm_nz_(output->view({rows, out_features}),
+                     input->view({rows, in_features}), weight, 1.0f, 0.0f);
+        distributed::allreduce_(output, output, INFINICCL_SUM, communicator);
+        if (bias) {
+            return add(output, *bias);
         }
         return output;
     }
 
-    if (packed_layout == PackedLayout::ASCEND_NZ) {
-        throw std::runtime_error(
-            "FRACTAL_NZ fused linear/all-reduce is only supported on Ascend");
-    }
-
     auto output = weight_is_packed
-                    ? linear_packed(input, weight, bias)
-                    : linear(input, weight, bias);
+                    ? linear_packed(input, weight, std::nullopt)
+                    : linear(input, weight, std::nullopt);
     distributed::allreduce_(
         output, output, INFINICCL_SUM, communicator);
+    if (bias) {
+        return add(output, *bias);
+    }
     return output;
 }
 

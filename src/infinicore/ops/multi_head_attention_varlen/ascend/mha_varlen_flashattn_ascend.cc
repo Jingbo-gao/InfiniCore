@@ -1,6 +1,7 @@
 #if defined(ENABLE_ASCEND_FLASH_ATTN)
 
 #include "infinicore/context/context.hpp"
+#include "infinicore/graph/graph.hpp"
 #include "infinicore/ops/mha_varlen.hpp"
 #include "native/ascend/workspace_pool_.h"
 
@@ -187,22 +188,41 @@ void run(void *planned_meta) {
     int64_t cu_k_len = cu_k_shape[0];
     int64_t batch_size = cu_q_len - 1;
 
-    std::vector<int32_t> cu_q_host(cu_q_len);
-    std::vector<int32_t> cu_k_host(cu_k_len);
-    aclrtMemcpy(cu_q_host.data(), cu_q_len * sizeof(int32_t),
-                reinterpret_cast<const void *>(cu_q_tensor->data()),
-                cu_q_len * sizeof(int32_t), ACL_MEMCPY_DEVICE_TO_HOST);
-    aclrtMemcpy(cu_k_host.data(), cu_k_len * sizeof(int32_t),
-                reinterpret_cast<const void *>(cu_k_tensor->data()),
-                cu_k_len * sizeof(int32_t), ACL_MEMCPY_DEVICE_TO_HOST);
+    auto load_cu_seqlens = [](const Tensor &tensor, int64_t length) {
+        if (const auto *bound = graph::lookup_bound_host_int_array(tensor)) {
+            if (bound->size() != static_cast<size_t>(length)) {
+                throw std::runtime_error(
+                    "[mha_varlen/ascend] bound sequence length size mismatch");
+            }
+            return *bound;
+        }
+
+        std::vector<int32_t> host(length);
+        auto ret = aclrtMemcpy(host.data(), length * sizeof(int32_t),
+                               reinterpret_cast<const void *>(tensor->data()),
+                               length * sizeof(int32_t),
+                               ACL_MEMCPY_DEVICE_TO_HOST);
+        if (ret != ACL_SUCCESS) {
+            throw std::runtime_error(
+                "[mha_varlen/ascend] copy sequence lengths to host failed");
+        }
+        return std::vector<int64_t>(host.begin(), host.end());
+    };
+
+    const auto cu_q_values = load_cu_seqlens(cu_q_tensor, cu_q_len);
+    const auto cu_k_values = cu_q_tensor->data() == cu_k_tensor->data()
+                                 ? cu_q_values
+                                 : load_cu_seqlens(cu_k_tensor, cu_k_len);
 
     std::vector<int64_t> actual_seq_q_vec;
     std::vector<int64_t> actual_seq_k_vec;
+    actual_seq_q_vec.reserve(batch_size);
+    actual_seq_k_vec.reserve(batch_size);
     for (int64_t i = 0; i < batch_size; ++i) {
-        int64_t k_len = cu_k_host[i + 1] - cu_k_host[i];
+        int64_t k_len = cu_k_values[i + 1] - cu_k_values[i];
         // TND query uses cumulative sequence lengths. Paged KV cache keeps
         // actualSeqLengthsKv in per-batch mode.
-        actual_seq_q_vec.push_back(cu_q_host[i + 1]);
+        actual_seq_q_vec.push_back(cu_q_values[i + 1]);
         actual_seq_k_vec.push_back(k_len);
     }
 
