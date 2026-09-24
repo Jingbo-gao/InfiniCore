@@ -243,4 +243,3 @@ extern "C" infiniStatus_t paged_caching_kernel_launch(
 
 #undef LAUNCH_PAGED_CACHING
 }
-

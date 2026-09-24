@@ -251,4 +251,3 @@ void linear_packed_nz_(Tensor out,
 }
 
 } // namespace infinicore::op
-
