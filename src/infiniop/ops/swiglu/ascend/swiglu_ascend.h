@@ -1,4 +1,4 @@
-#ifndef __ACLNN_SWIGLU_H__
+﻿#ifndef __ACLNN_SWIGLU_H__
 #define __ACLNN_SWIGLU_H__
 
 #include "../../../../utils.h"
@@ -50,9 +50,15 @@ public:
 class Descriptor final : public InfiniopDescriptor {
     SwigluInfo _info;
     size_t _workspace_size;
+    // swiglu 骞惰搴︿紭鍖栧紑鍏宠В鏋愮粨鏋滐紙create 鏃惰鍙?env 涓€娆★級
+    size_t _forced_block_num;   // 0 琛ㄧず鏈己鍒讹紝鎸?AIV 鏍告暟
+    bool _legacy_requested;     // env == 8 -> 涓ユ牸 legacy
 
-    Descriptor(SwigluInfo info, size_t workspace_size, infiniDevice_t device_type, int device_id) : InfiniopDescriptor{device_type, device_id},
-                                                                                                    _info(info), _workspace_size(workspace_size) {}
+    Descriptor(SwigluInfo info, size_t workspace_size, infiniDevice_t device_type, int device_id,
+               size_t forced_block_num, bool legacy_requested) : InfiniopDescriptor{device_type, device_id},
+                                                                 _info(info), _workspace_size(workspace_size),
+                                                                 _forced_block_num(forced_block_num),
+                                                                 _legacy_requested(legacy_requested) {}
 
 public:
     ~Descriptor();
@@ -73,7 +79,8 @@ extern "C" infiniStatus_t swiglu_kernel_launch(
     void *c, void *a, void *b,
     infiniDtype_t dtype, size_t batch, size_t seq, size_t hd,
     ptrdiff_t stride_batch_c, ptrdiff_t stride_batch_a, ptrdiff_t stride_batch_b,
-    ptrdiff_t stride_seq_c, ptrdiff_t stride_seq_a, ptrdiff_t stride_seq_b, void *stream);
+    ptrdiff_t stride_seq_c, ptrdiff_t stride_seq_a, ptrdiff_t stride_seq_b,
+    size_t block_num, bool legacy, void *stream);
 
 } // namespace op::swiglu::ascend
 #endif // __ACLNN_SWIGLU_H__
