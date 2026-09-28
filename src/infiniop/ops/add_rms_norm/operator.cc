@@ -9,8 +9,7 @@
 #include "nvidia/add_rms_norm_nvidia.cuh"
 #endif
 #ifdef ENABLE_ASCEND_API
-// TODO: Add Ascend implementation
-// #include "ascend/add_rms_norm_aclnn.h"
+#include "ascend/add_rms_norm_aclnn.h"
 #endif
 #ifdef ENABLE_CAMBRICON_API
 #include "bang/add_rms_norm_bang.h"
@@ -51,6 +50,9 @@ __INFINI_C infiniStatus_t infiniopCreateAddRMSNormDescriptor(
     switch (handle->device) {
 #ifdef ENABLE_CPU_API
         CREATE(INFINI_DEVICE_CPU, cpu);
+#endif
+#ifdef ENABLE_ASCEND_API
+        CREATE(INFINI_DEVICE_ASCEND, ascend);
 #endif
 #ifdef ENABLE_NVIDIA_API
         CREATE(INFINI_DEVICE_NVIDIA, nvidia);
@@ -96,6 +98,9 @@ __INFINI_C infiniStatus_t infiniopGetAddRMSNormWorkspaceSize(infiniopAddRMSNormD
     switch (desc->device_type) {
 #ifdef ENABLE_CPU_API
         GET(INFINI_DEVICE_CPU, cpu);
+#endif
+#ifdef ENABLE_ASCEND_API
+        GET(INFINI_DEVICE_ASCEND, ascend);
 #endif
 #ifdef ENABLE_NVIDIA_API
         GET(INFINI_DEVICE_NVIDIA, nvidia);
@@ -153,6 +158,9 @@ __INFINI_C infiniStatus_t infiniopAddRMSNorm(
 #ifdef ENABLE_CPU_API
         CALCULATE(INFINI_DEVICE_CPU, cpu);
 #endif
+#ifdef ENABLE_ASCEND_API
+        CALCULATE(INFINI_DEVICE_ASCEND, ascend);
+#endif
 #ifdef ENABLE_NVIDIA_API
         CALCULATE(INFINI_DEVICE_NVIDIA, nvidia);
 #endif
@@ -199,6 +207,9 @@ __INFINI_C infiniStatus_t infiniopDestroyAddRMSNormDescriptor(infiniopAddRMSNorm
     switch (desc->device_type) {
 #ifdef ENABLE_CPU_API
         DESTROY(INFINI_DEVICE_CPU, cpu);
+#endif
+#ifdef ENABLE_ASCEND_API
+        DESTROY(INFINI_DEVICE_ASCEND, ascend);
 #endif
 #ifdef ENABLE_NVIDIA_API
         DESTROY(INFINI_DEVICE_NVIDIA, nvidia);

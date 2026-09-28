@@ -33,7 +33,8 @@ void RMSNorm::forward_inplace(Tensor &x, Tensor &residual) const {
             || device_.getType() == Device::Type::MOORE
             || device_.getType() == Device::Type::ALI
             || device_.getType() == Device::Type::CAMBRICON
-            || device_.getType() == Device::Type::HYGON) {
+            || device_.getType() == Device::Type::HYGON
+            || device_.getType() == Device::Type::ASCEND) {
             op::add_rms_norm_inplace(x, residual, weight_, static_cast<float>(eps_));
         } else {
             op::add_(residual, x, residual);
