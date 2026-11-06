@@ -7,7 +7,15 @@
 
 #include <acl/acl.h>
 #include <aclnnop/aclnn_fused_infer_attention_score.h>
+// 950DT 的 CANN 9.2 移除了 FIA v1~v4, 需用 v5; 老版本 CANN 无 v5 头文件,
+// 按 __has_include 自动选择
+#if __has_include(<aclnnop/aclnn_fused_infer_attention_score_v5.h>)
+#include <aclnnop/aclnn_fused_infer_attention_score_v5.h>
+#define INFINI_USE_FIA_V5 1
+#else
 #include <aclnnop/aclnn_fused_infer_attention_score_v4.h>
+#define INFINI_USE_FIA_V5 0
+#endif
 
 #include <algorithm>
 #include <cstring>
@@ -307,6 +315,42 @@ void run(void *planned_meta) {
     uint64_t workspace_size = 0;
     aclOpExecutor *executor = nullptr;
 
+#if INFINI_USE_FIA_V5
+    // v5 相比 v4 新增 qStartIdx/kvStartIdx/pseType 三个参数
+    aclnnStatus ret = aclnnFusedInferAttentionScoreV5GetWorkspaceSize(
+        query_acl, key_acl, value_acl,
+        nullptr, // pseShift
+        atten_mask_acl, actual_seq_q_acl, actual_seq_k_acl, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, nullptr,
+        block_table_acl, // blockTable - Paged Attention
+        nullptr,         // queryPaddingSize
+        nullptr,         // kvPaddingSize
+        nullptr,         // keyAntiquantScale
+        nullptr,         // keyAntiquantOffset
+        nullptr,         // valueAntiquantScale
+        nullptr,         // valueAntiquantOffset
+        nullptr,         // keySharedPrefix
+        nullptr,         // valueSharedPrefix
+        nullptr,         // actualSharedPrefixLen
+        nullptr,         // queryRope
+        nullptr,         // keyRope
+        nullptr,         // keyRopeAntiquantScale
+        nullptr,         // dequantScaleQuery
+        nullptr,         // learnableSink
+        nullptr,         // qStartIdx (v5, 非外切场景传空)
+        nullptr,         // kvStartIdx (v5, 非外切场景传空)
+        num_heads, static_cast<double>(p->scale), 2147483647, 2147483647,
+        const_cast<char *>("TND"), num_kv_heads, sparse_mode,
+        0,              // innerPrecise: high precision TND path
+        block_size_val, // blockSize - Paged Attention block size
+        0,              // antiquantMode
+        false,
+        0, // keyAntiquantMode
+        0, // valueAntiquantMode
+        0, // queryQuantMode
+        0, // pseType (v5, 0 表示外部 pse)
+        out_acl, nullptr, &workspace_size, &executor);
+#else
     aclnnStatus ret = aclnnFusedInferAttentionScoreV4GetWorkspaceSize(
         query_acl, key_acl, value_acl,
         nullptr, // pseShift
@@ -337,6 +381,7 @@ void run(void *planned_meta) {
         0, // valueAntiquantMode
         0, // queryQuantMode
         out_acl, nullptr, &workspace_size, &executor);
+#endif
 
     if (ret != 0) {
         aclDestroyTensor(query_acl);
@@ -351,8 +396,7 @@ void run(void *planned_meta) {
         const char *err_msg = aclGetRecentErrMsg();
         throw std::runtime_error(
             std::string(
-                "[mha_varlen/ascend] "
-                "aclnnFusedInferAttentionScoreV4GetWorkspaceSize failed: ")
+                "[mha_varlen/ascend] FIA GetWorkspaceSize failed: ")
             + std::to_string(ret) + ", msg: " + (err_msg ? err_msg : "(null)"));
     }
 
@@ -364,8 +408,13 @@ void run(void *planned_meta) {
                         .buf;
     }
 
+#if INFINI_USE_FIA_V5
+    ret = aclnnFusedInferAttentionScoreV5(workspace, workspace_size, executor,
+                                          stream);
+#else
     ret = aclnnFusedInferAttentionScoreV4(workspace, workspace_size, executor,
                                           stream);
+#endif
 
     // Release aclTensor/aclTensorList/aclIntArray resources
     aclDestroyTensor(query_acl);
@@ -382,7 +431,7 @@ void run(void *planned_meta) {
         const char *err_msg = aclGetRecentErrMsg();
         throw std::runtime_error(
             std::string(
-                "[mha_varlen/ascend] aclnnFusedInferAttentionScoreV4 failed: ")
+                "[mha_varlen/ascend] FIA execute failed: ")
             + std::to_string(ret) + ", msg: " + (err_msg ? err_msg : "(null)"));
     }
 
