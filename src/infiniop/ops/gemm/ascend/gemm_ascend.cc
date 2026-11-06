@@ -1,7 +1,12 @@
 #include "gemm_ascend.h"
 #include "../../../devices/ascend/common_ascend.h"
 #include <aclnnop/aclnn_matmul.h>
+// CANN 9.2 把这个头文件从 level2/ 挪到了 aclnnop/ 下, 老版本走原路径
+#if __has_include(<aclnnop/aclnn_gemm.h>)
+#include <aclnnop/aclnn_gemm.h>
+#else
 #include <aclnnop/level2/aclnn_gemm.h>
+#endif
 
 #include <algorithm>
 #include <cstring>

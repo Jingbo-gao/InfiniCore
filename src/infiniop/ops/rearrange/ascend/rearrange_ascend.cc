@@ -81,9 +81,11 @@ infiniStatus_t Descriptor::calculate(
     uint64_t workspace_size = 0;
     aclOpExecutor *executor = nullptr;
 
+    // 必须先通过 GetWorkspaceSize 创建 executor, 再调 AclSetTensorAddr;
+    // 原顺序是在 nullptr executor 上设地址, 地址不生效, 拷贝静默失败
+    CHECK_ACL(aclnnInplaceCopyGetWorkspaceSize(tdst, tsrc, &workspace_size, &executor));
     AclSetTensorAddr(executor, 0, tdst, y);
     AclSetTensorAddr(executor, 1, tsrc, (void *)x);
-    CHECK_ACL(aclnnInplaceCopyGetWorkspaceSize(tdst, tsrc, &workspace_size, &executor));
     // Execute InplaceCopy
     CHECK_ACL(aclnnInplaceCopy(_opaque->workspace, _opaque->workspace_size,
                                executor, stream));
