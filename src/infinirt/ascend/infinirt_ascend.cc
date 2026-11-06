@@ -99,7 +99,10 @@ infiniStatus_t eventElapsedTime(float *ms_ptr, infinirtEvent_t start, infinirtEv
 }
 
 infiniStatus_t mallocDevice(void **p_ptr, size_t size) {
-    CHECK_ACLRT(aclrtMallocAlign32(p_ptr, size, ACL_MEM_MALLOC_HUGE_FIRST));
+    // 950 上小尺寸对齐分配在 HUGE_FIRST 下可能报 207001, 失败后回退 NORMAL_ONLY
+    if (aclrtMallocAlign32(p_ptr, size, ACL_MEM_MALLOC_HUGE_FIRST) != ACL_SUCCESS) {
+        CHECK_ACLRT(aclrtMallocAlign32(p_ptr, size, ACL_MEM_MALLOC_NORMAL_ONLY));
+    }
     return INFINI_STATUS_SUCCESS;
 }
 
